@@ -27,6 +27,16 @@ Process rules for changing this repository. Product behaviour lives in
    end-to-end otherwise; add matrix rows.
 5. Plan end-to-end verification — which `nq` invocation or test proves it.
 
+## Algorithm changes
+
+Every change to the measurement algorithm is judged by the scenario matrix
+(`internal/engine/scenario_test.go`): it must not regress a passing scenario,
+must not make any scenario dishonest, and must remove from `knownFailing`
+every scenario it fixes (the test fails on stale entries). "Better" is
+measured as scenarios passing and bytes/seconds spent, not by opinion.
+Simulator changes need a model test in `internal/linksim` showing the effect
+they add is real, ideally calibrated against a recorded trace.
+
 ## Consultation rules
 
 - Changing product behaviour → read the relevant spec first; update it in

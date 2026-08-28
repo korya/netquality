@@ -25,6 +25,7 @@ cmd/nq ──────────┐                      cmd/nqserver
   engine.go    one Observation per interval → one Decision; probe spacing; final summary
   stability.go draft moving-average criterion, confidence
   stats.go     latency statistics, trimmed mean, RPM
+        internal/linksim — fluid link model driving the engine in tests (capacity, RTT, queue, shaper, buffers, jitter)
         internal/buildinfo  ldflags version metadata
 ```
 

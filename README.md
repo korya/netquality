@@ -158,7 +158,11 @@ The client needs no flags. The signature covers only the path, `exp` and
 `sub` — `sig = base64url(HMAC-SHA256(key, path + "\n" + exp + "\n" + sub))` —
 so any language can issue it, parameter order is irrelevant, and unsigned
 parameters are deliberately unprotected (never let a server trust them).
-Validity is `exp` + 30 s leeway, at most 24 h; `sub` keys the per-client
+Validity is `exp` + 30 s leeway, at most 24 h — keep issuer and server
+clocks in sync, a server clock behind the issuer refuses everything as
+"issued too far ahead". Sign the *decoded* path (`/nq/large`, not
+`/nq/%6Carge`), percent‑encode `sub` (a raw `+` decodes to a space and fails
+closed), and emit `sig` in any base64 flavour. `sub` keys the per-client
 budget, so ten laptops behind one NAT get ten budgets. Repeat
 `--signing-key` to rotate. Go backends can call `server.SignURL`.
 

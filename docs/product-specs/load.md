@@ -49,8 +49,11 @@ Responsiveness confidence is `low` whenever throughput never stabilised.
 
 ### LOAD-9: Flow errors
 A load request that fails for a reason other than cancellation aborts the
-phase with `reason=flow_error`. If no interval had completed, `Run` returns
-the error; otherwise the partial direction result is kept with a warning.
+phase with `reason=flow_error` and a warning; everything measured so far in
+that direction and in earlier phases is kept. If no interval had completed,
+`Run` additionally returns an error carrying the failure (e.g. the HTTP
+status) alongside the partial result; only discovery failures yield no
+result at all.
 
 ### LOAD-10: Finite server objects
 A large download that ends cleanly is re-requested on the same connection so

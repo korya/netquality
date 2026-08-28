@@ -63,7 +63,11 @@ whose query carries `exp` (unix seconds), optional `sub` (≤ 256 bytes), and
 in constant time against every configured key (rotation). A signature is
 valid until `exp` plus 30 s of leeway and never for more than 24 h from
 issue; parameter order and unsigned parameters do not affect it, and the
-server never derives authorisation or limits from unsigned parameters. A
+server never derives authorisation or limits from unsigned parameters. The
+signed path is the decoded request path; `sub` is compared after query
+decoding, so issuers percent-encode it; `sig` is accepted in raw or padded,
+URL-safe or standard base64; a duplicated parameter counts by its first
+occurrence. Issuer and server clocks must agree to within the leeway. A
 bearer token and a signature are each sufficient. The config document is
 never accepted on a signature alone: a backend serves it. `nqserver sign`
 mints URLs and keys for testing.

@@ -5,6 +5,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- A load phase that fails before completing an interval no longer discards
+  the whole result: `Run` returns the partial `Result` (that direction
+  flagged `flow_error`, earlier phases intact) together with the error. Only
+  discovery failures return no result.
+- Signed URLs: `sig` accepted in raw or padded, URL-safe or standard base64.
+
+### Added
+- End-to-end tests for real-world failure modes (upload rejected mid-stream,
+  stalled body, redirects, dead hosts, upload cancellation/HTTP/1.1), IPv6
+  loopback, full ramp to 16 flows, JSON round-trip, CLI edge flags, and the
+  signed-URL encoding/canonicalisation edge cases.
+
 ### Added
 - `nqserver --signing-key`: the test endpoints accept HMAC-SHA256-signed,
   expiring URLs (`exp`, optional `sub`, `sig`) minted by a backend, so

@@ -23,7 +23,11 @@ levels accompany converged values.
 
 ### INV-4: No work outlives `Run`
 When `Run` returns, all goroutines, connections, and timers it created are
-gone. Cancellation propagates to every flow and probe.
+gone. Cancellation propagates to every flow and probe. This covers the
+client's own sockets. Abandoning a load flow closes its socket with data still
+unread, which TCP turns into an abortive close, so how long the *server's*
+socket survives is the server's business, not something the client can
+promise.
 
 ### INV-5: Standard library only
 No third-party runtime dependencies; no CGO. `golang.org/x/...` needs a

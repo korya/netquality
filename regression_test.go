@@ -113,7 +113,9 @@ func TestNoLeaksAcrossRuns(t *testing.T) {
 			t.Fatalf("run %d: %v", i, err)
 		}
 	}
-	if !eventually(3*time.Second, func() bool { return cl.open.Load() == 0 }) {
+	// The server observes a client close with some lag (seconds under -race
+	// on a loaded runner); a real leak never clears, so wait generously.
+	if !eventually(10*time.Second, func() bool { return cl.open.Load() == 0 }) {
 		t.Errorf("connections leaked: %d still open after 8 runs", cl.open.Load())
 	}
 	runtime.GC()

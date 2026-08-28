@@ -1,4 +1,4 @@
-# netquality
+# [![CI](https://github.com/korya/netquality/actions/workflows/ci.yml/badge.svg)](https://github.com/korya/netquality/actions/workflows/ci.yml) [![Go Reference](https://pkg.go.dev/badge/github.com/korya/netquality.svg)](https://pkg.go.dev/github.com/korya/netquality) netquality
 
 A Go library and CLI that measure the **capacity, latency and responsiveness**
 of a network path by running the IETF *Responsiveness under Working

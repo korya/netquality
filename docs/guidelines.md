@@ -10,8 +10,18 @@ Process rules for changing this repository. Product behaviour lives in
 - **Test 100 % of use cases.** Every feature and scenario has a row in
   `test-matrix.md` naming its test; `TestMatrix` fails otherwise. Statement
   coverage is reported in CI, not gated.
-- **Race-free.** `go test -race ./...` is the CI command; new concurrent code
-  ships with a test that exercises it under the race detector.
+- **Parallel-safe by default.** Any state reachable from an HTTP handler, a
+  probe or flow goroutine, an event sink, or a test helper that wraps one of
+  those is shared by definition — guard it with a mutex or `sync/atomic`. A
+  plain field in such a path is the exception and carries a comment saying
+  why it is safe. Every race found so far came from code the author believed
+  was single-threaded; ask "which goroutines can reach this?" before "which
+  primitive?".
+- **Race-free, with repetition.** Races are probabilistic and a fast laptop
+  often misses what a slow CI runner hits. Before pushing, run
+  `go test -race -count=3 ./<touched packages>`; CI runs the race suite with
+  `-count=2`. New concurrent code ships with a test that exercises it under
+  the race detector.
 - **Deterministic offline.** Tests run against the in-process server; only
   `TestLive` (`NQ_LIVE=1`, nightly) touches the Internet.
 

@@ -71,7 +71,10 @@ testdata/config/  config document fixtures (Apple, Cloudflare, draft, SERVER_SPE
 - All changes go through a draft pull request from a `<author>-<slug>`
   branch; never push to `master`. See `docs/guidelines.md` "Submitting
   changes" for commit and PR description rules.
-- Lint and vet clean; `go test -race ./...` green on all three OSes.
+- Lint and vet clean; `go test -race ./...` green on all three OSes. State
+  reachable from handlers, flow/probe goroutines, event sinks, or test
+  helpers wrapping them is shared: mutex or atomic by default; run
+  `-race -count=3` on touched packages before pushing.
 - Every new behaviour gets a spec ID, a test, and a matrix row.
 - Follow the planning checklist in `docs/guidelines.md`; validate assumptions
   against `HEAD` and with experiments, not memory.

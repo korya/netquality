@@ -1,0 +1,5 @@
+/nq
+/nqserver
+/dist/
+*.test
+*.out

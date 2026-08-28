@@ -143,3 +143,32 @@ func TestHelpers(t *testing.T) {
 		t.Error(out.String())
 	}
 }
+
+func TestAuthTokenFlagAndEnv(t *testing.T) {
+	srv := httptest.NewUnstartedServer(server.Handler(server.Options{AuthToken: "s3cret"}))
+	srv.EnableHTTP2 = true
+	srv.StartTLS()
+	t.Cleanup(srv.Close)
+	url := srv.URL + server.ConfigPath
+	var out, errb bytes.Buffer
+	if c := run(base(url, "--download-only", "--json"), &out, &errb); c != exitFail || !strings.Contains(errb.String(), "401") {
+		t.Errorf("no token: exit %d %q", c, errb.String())
+	}
+	errb.Reset()
+	if c := run(base(url, "--download-only", "--json", "--auth-token", "wrong"), &out, &errb); c != exitFail || !strings.Contains(errb.String(), "401") {
+		t.Errorf("wrong token: exit %d %q", c, errb.String())
+	}
+	out.Reset()
+	if c := run(base(url, "--download-only", "--json", "--auth-token", "s3cret"), &out, &errb); c != exitOK {
+		t.Fatalf("flag token: exit %d %s", c, errb.String())
+	}
+	var res netquality.Result
+	if err := json.Unmarshal(out.Bytes(), &res); err != nil || res.Download == nil || res.Download.Bytes == 0 {
+		t.Errorf("flag token run: %v %+v", err, res.Download)
+	}
+	t.Setenv("NQ_AUTH_TOKEN", "s3cret")
+	out.Reset()
+	if c := run(base(url, "--download-only", "--json"), &out, &errb); c != exitOK {
+		t.Errorf("env token: exit %d %s", c, errb.String())
+	}
+}

@@ -46,5 +46,9 @@ interrupted; 2 on usage or configuration errors.
 `nq version` prints the version, commit, and build time injected at build
 time, or `devel` with VCS info when built without them.
 
+### CLI-11: Authentication
+`--auth-token` (or `NQ_AUTH_TOKEN`) sends `Authorization: Bearer <token>` on
+every request; a rejected token exits 1 with the `401` in the message.
+
 ### CLI-10: Interrupt
 Ctrl-C cancels the run; partial results are printed and the exit code is 1.

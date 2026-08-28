@@ -77,6 +77,10 @@ type Options struct {
 	Logger *slog.Logger
 	// ConfigTimeout bounds config discovery (default 10s).
 	ConfigTimeout time.Duration
+	// Header is added to every request the test sends (config fetch, probes,
+	// load flows): credentials for a protected server, for example
+	// Authorization: Bearer <token>. Keys set here override the defaults.
+	Header http.Header
 
 	// clock is injectable for tests; nil means the wall clock.
 	clock clock

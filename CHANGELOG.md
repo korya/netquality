@@ -6,11 +6,19 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `nqserver` bearer-token authentication (`--auth-token` / `NQSERVER_AUTH_TOKEN`)
+  on every endpoint, and load limits that gate requests without shaping
+  traffic: per-client byte budget (`--client-bytes`/`--client-window`, 429 +
+  `Retry-After`), `--upload-size`, `--max-connections` (#1).
+- `Options.Header` applied to every request; `nq --auth-token` /
+  `NQ_AUTH_TOKEN`.
 - Internal: `internal/linksim`, a fluid link model, and an algorithm
   scenario matrix with honesty/budget/convergence/accuracy oracles and a
   `knownFailing` ledger of what the current algorithm cannot yet do.
 
 ### Changed
+- `nqserver` refuses to serve anonymously with a real certificate unless
+  `--allow-anonymous`; `--self-signed` implies it.
 - Internal: the per-interval measurement logic now lives in a pure,
   clock-free `internal/engine` package driven by observations, so it can be
   tested against recorded and simulated links. No behaviour or JSON change;

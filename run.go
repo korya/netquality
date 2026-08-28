@@ -177,7 +177,7 @@ func (r *runner) discover(ctx context.Context, t Target) (*ServerConfig, error) 
 		return nil, fmt.Errorf("netquality: config url: %w", err)
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", userAgent)
+	setProbeHeaders(req, r.opts.Header)
 	rt := r.opts.HTTPClient.Transport
 	if rt == nil {
 		rt = http.DefaultTransport
@@ -211,7 +211,7 @@ func (r *runner) idle(ctx context.Context) (*LatencyStats, error) {
 		if ctx.Err() != nil {
 			break
 		}
-		s, err := foreignProbe(ctx, rt, r.cfg.SmallDownloadURL, r.opts.clock.Now, r.observeTLS)
+		s, err := foreignProbe(ctx, rt, r.cfg.SmallDownloadURL, r.opts.Header, r.opts.clock.Now, r.observeTLS)
 		if err != nil {
 			lastErr = err
 			continue
@@ -333,7 +333,7 @@ func (r *runner) loadPhase(ctx context.Context, dir Directions) (*DirectionResul
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			err := runFlow(pctx, f, dir, p.url, p.bytes, r.observeTLS)
+			err := runFlow(pctx, f, dir, p.url, p.bytes, r.opts.Header, r.observeTLS)
 			if err != nil && !errors.Is(err, errFlowDone) {
 				errMu.Lock()
 				p.flowErrs++
@@ -504,10 +504,10 @@ func (r *runner) probeLoop(ctx context.Context, p *phaseState) {
 					return // cannot multiplex on HTTP/1.1
 				}
 				p.bytes.add(selfProbeBytes)
-				s, err = selfProbe(ctx, f.rt, r.cfg.SmallDownloadURL, r.opts.clock.Now)
+				s, err = selfProbe(ctx, f.rt, r.cfg.SmallDownloadURL, r.opts.Header, r.opts.clock.Now)
 			} else {
 				p.bytes.add(foreignProbeBytes)
-				s, err = foreignProbe(ctx, foreignRT, r.cfg.SmallDownloadURL, r.opts.clock.Now, r.observeTLS)
+				s, err = foreignProbe(ctx, foreignRT, r.cfg.SmallDownloadURL, r.opts.Header, r.opts.clock.Now, r.observeTLS)
 			}
 			if err != nil {
 				if ctx.Err() == nil {

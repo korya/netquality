@@ -30,7 +30,7 @@ const (
 // foreignProbe performs a GET of the small URL on a brand-new connection and
 // records per-stage timings. rt must not reuse connections.
 // observe, if non-nil, receives the TLS state of every successful handshake.
-func foreignProbe(ctx context.Context, rt http.RoundTripper, url string, now func() time.Time, observe func(tls.ConnectionState)) (LatencySample, error) {
+func foreignProbe(ctx context.Context, rt http.RoundTripper, url string, extra http.Header, now func() time.Time, observe func(tls.ConnectionState)) (LatencySample, error) {
 	pt := &probeTimes{}
 	start := now()
 	lock := func(f func()) { pt.mu.Lock(); defer pt.mu.Unlock(); f() }
@@ -79,7 +79,7 @@ func foreignProbe(ctx context.Context, rt http.RoundTripper, url string, now fun
 			})
 		},
 	}
-	if err := doProbe(httptrace.WithClientTrace(ctx, trace), rt, url); err != nil {
+	if err := doProbe(httptrace.WithClientTrace(ctx, trace), rt, url, extra); err != nil {
 		return LatencySample{}, err
 	}
 	end := now()
@@ -102,12 +102,12 @@ func foreignProbe(ctx context.Context, rt http.RoundTripper, url string, now fun
 }
 
 // doProbe issues the GET and drains the 1-byte body.
-func doProbe(ctx context.Context, rt http.RoundTripper, url string) error {
+func doProbe(ctx context.Context, rt http.RoundTripper, url string, extra http.Header) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
 	}
-	setProbeHeaders(req)
+	setProbeHeaders(req, extra)
 	resp, err := rt.RoundTrip(req)
 	if err != nil {
 		return err
@@ -122,7 +122,7 @@ func doProbe(ctx context.Context, rt http.RoundTripper, url string) error {
 
 // selfProbe performs a GET of the small URL on an existing (load) transport.
 // Only the request-to-full-response time is meaningful.
-func selfProbe(ctx context.Context, rt http.RoundTripper, url string, now func() time.Time) (LatencySample, error) {
+func selfProbe(ctx context.Context, rt http.RoundTripper, url string, extra http.Header, now func() time.Time) (LatencySample, error) {
 	pt := &probeTimes{}
 	start := now()
 	trace := &httptrace.ClientTrace{
@@ -132,7 +132,7 @@ func selfProbe(ctx context.Context, rt http.RoundTripper, url string, now func()
 			pt.mu.Unlock()
 		},
 	}
-	if err := doProbe(httptrace.WithClientTrace(ctx, trace), rt, url); err != nil {
+	if err := doProbe(httptrace.WithClientTrace(ctx, trace), rt, url, extra); err != nil {
 		return LatencySample{}, err
 	}
 	end := now()
@@ -145,10 +145,15 @@ func selfProbe(ctx context.Context, rt http.RoundTripper, url string, now func()
 	return LatencySample{Total: end.Sub(start), HTTP: end.Sub(wr)}, nil
 }
 
-func setProbeHeaders(req *http.Request) {
+// setProbeHeaders applies the headers every test request carries, then the
+// caller-supplied extras (which win on conflict).
+func setProbeHeaders(req *http.Request, extra http.Header) {
 	req.Header.Set("Accept-Encoding", "identity")
 	req.Header.Set("Cache-Control", "no-store")
 	req.Header.Set("User-Agent", userAgent)
+	for k, vs := range extra {
+		req.Header[http.CanonicalHeaderKey(k)] = append([]string(nil), vs...)
+	}
 }
 
 const userAgent = "netquality-go/1 (+https://github.com/korya/netquality)"

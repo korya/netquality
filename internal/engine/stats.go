@@ -8,6 +8,13 @@ import (
 
 // LatencyStats summarises a set of latency samples.
 //
+// Percentiles use the nearest-rank method, which returns the maximum for any
+// percentile above 100·(n-1)/n. A percentile field is therefore present only
+// when the sample count makes it a real order statistic distinct from the
+// maximum: P80 from 5 samples, P90 from 10, P95 from 20, P99 from 100. A
+// field never holds a lower percentile than its name says; absent means "not
+// enough samples", never zero.
+//
 // Jitter is the mean absolute deviation of the samples from their mean.
 // Stages holds per-stage medians (dns, connect, tls, ttfb) when the samples
 // carry stage timings (foreign probes and idle probes do; self probes do not).
@@ -16,10 +23,33 @@ type LatencyStats struct {
 	Min     time.Duration `json:"min_ns"`
 	Median  time.Duration `json:"median_ns"`
 	Mean    time.Duration `json:"mean_ns"`
-	P95     time.Duration `json:"p95_ns"`
+	P80     time.Duration `json:"p80_ns,omitempty"`
+	P90     time.Duration `json:"p90_ns,omitempty"`
+	P95     time.Duration `json:"p95_ns,omitempty"`
+	P99     time.Duration `json:"p99_ns,omitempty"`
 	Max     time.Duration `json:"max_ns"`
 	Jitter  time.Duration `json:"jitter_ns"`
 	Stages  *StageMedians `json:"stages,omitempty"`
+}
+
+// percentileMinSamples is the smallest n at which nearest-rank percentile p
+// is not simply the maximum: the least n with ceil(p/100·n) < n.
+var percentileMinSamples = map[float64]int{80: 5, 90: 10, 95: 20, 99: 100}
+
+// HighestPercentile returns the largest percentile present and its value,
+// or (0, 0) when the set is too small for any.
+func (s LatencyStats) HighestPercentile() (float64, time.Duration) {
+	switch {
+	case s.P99 > 0:
+		return 99, s.P99
+	case s.P95 > 0:
+		return 95, s.P95
+	case s.P90 > 0:
+		return 90, s.P90
+	case s.P80 > 0:
+		return 80, s.P80
+	}
+	return 0, 0
 }
 
 // StageMedians holds median per-stage timings from net/http/httptrace.
@@ -166,15 +196,28 @@ func statsOf(d []time.Duration) LatencyStats {
 	for _, v := range sorted {
 		dev += math.Abs(float64(v - mean))
 	}
-	return LatencyStats{
+	st := LatencyStats{
 		Samples: len(sorted),
 		Min:     sorted[0],
 		Median:  medianDuration(sorted),
 		Mean:    mean,
-		P95:     percentile(sorted, 95),
 		Max:     sorted[len(sorted)-1],
 		Jitter:  time.Duration(dev / float64(len(sorted))),
 	}
+	n := len(sorted)
+	if n >= percentileMinSamples[80] {
+		st.P80 = percentile(sorted, 80)
+	}
+	if n >= percentileMinSamples[90] {
+		st.P90 = percentile(sorted, 90)
+	}
+	if n >= percentileMinSamples[95] {
+		st.P95 = percentile(sorted, 95)
+	}
+	if n >= percentileMinSamples[99] {
+		st.P99 = percentile(sorted, 99)
+	}
+	return st
 }
 
 // stddev of a float slice (population).

@@ -5,6 +5,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- Throughput no longer measures the test's own probe traffic. The fixed
+  per-probe byte estimate (5000 B foreign, 1000 B self) was added to the same
+  counter the engine reads as goodput, so a stalled or very slow path
+  reported hundreds of kbps that were purely probes — and, because probe
+  spacing is derived from that estimate, the client throttled itself to about
+  one probe per second on exactly the paths that most need probing. Probe
+  cost still counts against `MaxBytes` and `bytes` (LIM-2); `throughput_bps`,
+  `peak_throughput_bps` and `mean_throughput_bps` now count load-flow bytes
+  only (LOAD-4, LOAD-11).
+- Data race in the load phase: the reason a phase stopped was read on the
+  phase goroutine before the flow and probe goroutines were joined, while any
+  of them could still be writing it.
+
 ## [0.3.0] - 2026-08-28
 
 ### Changed

@@ -22,22 +22,40 @@ type flow struct {
 
 // byteCounter accumulates bytes moved by a phase and trips a callback when the
 // cap is reached. It is safe for concurrent use.
+//
+// It keeps two totals because they answer different questions. total is the
+// phase's cost — load payload plus the draft's fixed per-probe estimate — and
+// is what MaxBytes bounds when a caller sets one (LIM-2). payload is the load
+// flows' bytes alone and is the only thing goodput may be computed from
+// (LOAD-4) — feeding the probes' own estimated cost into the throughput
+// estimate makes a stalled link look fast and, through ProbeGap, throttles the
+// very probes that would show it is stalled.
 type byteCounter struct {
 	total   atomic.Int64
+	payload atomic.Int64
 	limit   int64
 	once    sync.Once
 	onLimit func()
 }
 
-// add counts n bytes and trips onLimit once when a positive limit is reached;
-// a limit of 0 means unlimited.
+// add records n bytes moved by a load flow: goodput and cost alike.
 func (c *byteCounter) add(n int64) {
+	c.payload.Add(n)
+	c.addProbe(n)
+}
+
+// addProbe records n bytes of probe traffic: cost only, never goodput. It
+// trips onLimit once when a positive limit is reached; a limit of 0 means
+// unlimited (LIM-2).
+func (c *byteCounter) addProbe(n int64) {
 	if t := c.total.Add(n); c.limit > 0 && t >= c.limit {
 		c.once.Do(c.onLimit)
 	}
 }
 
-func (c *byteCounter) get() int64 { return c.total.Load() }
+// get is the phase's total cost; payloadBytes is what the load flows moved.
+func (c *byteCounter) get() int64          { return c.total.Load() }
+func (c *byteCounter) payloadBytes() int64 { return c.payload.Load() }
 
 type countingWriter struct{ c *byteCounter }
 

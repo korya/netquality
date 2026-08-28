@@ -22,7 +22,11 @@ A phase starts with `InitialFlows` (default 1) and adds `FlowIncrement`
 (default 1) at every interval (default 1 s) until `MaxFlows` (default 16).
 
 ### LOAD-4: Goodput stability
-Per interval, goodput is bytes moved in the interval ×8 / interval length. The
+Per interval, goodput is the bytes the **load flows** moved in the interval ×8
+/ interval length. Probe traffic counts towards `MaxBytes` when one is set
+(LIM-2) but is never goodput: counting it would let a stalled or very slow
+path measure the test's own probes as capacity and, through the PTC spacing,
+throttle the probes that would show the path is stalled. The
 moving average spans the last `MovingAverageDistance` (default 4) intervals.
 Throughput is stable when the standard deviation of the last four moving
 averages is below `StdDevTolerance` (default 5 %) of the current one.
@@ -61,5 +65,8 @@ load continues.
 
 ### LOAD-11: Throughput figures
 `throughput_bps` is the final moving average; `peak_throughput_bps` the best
-single interval; `mean_throughput_bps` bytes×8/duration over the whole phase
-and the value used for `throughput_bps` when no interval completed.
+single interval; `mean_throughput_bps` load-flow bytes×8/duration over the
+whole phase and the value used for `throughput_bps` when no interval
+completed. All three exclude probe traffic (LOAD-4); `bytes` includes it
+because it reports the phase's total cost, which is also what `MaxBytes`
+bounds when set (LIM-2).

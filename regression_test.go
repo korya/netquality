@@ -2,6 +2,7 @@ package netquality
 
 import (
 	"context"
+	"crypto/tls"
 	"io"
 	"log"
 	"net"
@@ -30,17 +31,18 @@ func (l *countingListener) Accept() (net.Conn, error) {
 	}
 	l.opened.Add(1)
 	l.open.Add(1)
-	return &countedConn{Conn: c, l: l}, nil
+	return &countedConn{Conn: c, open: &l.open}, nil
 }
 
+// countedConn decrements open exactly once, however often it is closed.
 type countedConn struct {
 	net.Conn
-	l    *countingListener
+	open *atomic.Int64
 	once sync.Once
 }
 
 func (c *countedConn) Close() error {
-	c.once.Do(func() { c.l.open.Add(-1) })
+	c.once.Do(func() { c.open.Add(-1) })
 	return c.Conn.Close()
 }
 
@@ -66,6 +68,38 @@ func startCountingServer(t *testing.T, rec func(*http.Request)) (*httptest.Serve
 	return srv, cl
 }
 
+// countingDialer wraps the caller's transport dialer so a test can see exactly
+// which sockets the library opened and whether it closed them. This is the
+// side INV-4 is about: the client's own file descriptors. The peer's socket is
+// not ours to promise anything about — aborting a download closes the socket
+// with unread data still buffered, which is an abortive close (RST), and
+// whether the server's socket then goes away is up to the server and the
+// kernel, not to us.
+type countingDialer struct {
+	opened, open atomic.Int64
+	inner        net.Dialer
+}
+
+func (d *countingDialer) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	c, err := d.inner.DialContext(ctx, network, addr)
+	if err != nil {
+		return nil, err
+	}
+	d.opened.Add(1)
+	d.open.Add(1)
+	return &countedConn{Conn: c, open: &d.open}, nil
+}
+
+// countingClient returns a client that trusts the test server and reports its
+// socket usage through the returned dialer.
+func countingClient() (*http.Client, *countingDialer) {
+	d := &countingDialer{inner: net.Dialer{Timeout: 10 * time.Second}}
+	tr := http.DefaultTransport.(*http.Transport).Clone()
+	tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // test server
+	tr.DialContext = d.DialContext
+	return &http.Client{Transport: tr}, d
+}
+
 // eventually polls cond for up to d.
 func eventually(d time.Duration, cond func() bool) bool {
 	deadline := time.Now().Add(d)
@@ -82,17 +116,18 @@ func eventually(d time.Duration, cond func() bool) bool {
 // started survives and every connection it opened is closed — measured over
 // repeated runs in one process, the way an agent uses the library.
 func TestNoLeaksAcrossRuns(t *testing.T) {
-	srv, cl := startCountingServer(t, nil)
+	srv, _ := startCountingServer(t, nil)
 	target := Target{ConfigURL: srv.URL + server.ConfigPath}
-	opts := Options{HTTPClient: insecureClient(), IdleProbes: 2, MaxFlows: 6,
+	client, dialer := countingClient()
+	opts := Options{HTTPClient: client, IdleProbes: 2, MaxFlows: 6,
 		MaxDuration: 300 * time.Millisecond, MaxBytes: 1 << 40, Stability: fastStability()}
 
 	// Warm up once so lazily started runtime/net goroutines are in the baseline.
 	if _, err := Run(context.Background(), target, opts); err != nil {
 		t.Fatal(err)
 	}
-	if !eventually(3*time.Second, func() bool { return cl.open.Load() == 0 }) {
-		t.Fatalf("connections still open after warm-up: %d", cl.open.Load())
+	if !eventually(3*time.Second, func() bool { return dialer.open.Load() == 0 }) {
+		t.Fatalf("sockets still open after warm-up: %d", dialer.open.Load())
 	}
 	runtime.GC()
 	baseline := runtime.NumGoroutine()
@@ -112,11 +147,14 @@ func TestNoLeaksAcrossRuns(t *testing.T) {
 		if res == nil {
 			t.Fatalf("run %d: %v", i, err)
 		}
+		// INV-4 is a promise about the moment Run returns, so check it then —
+		// not after a grace period.
+		if n := dialer.open.Load(); n != 0 {
+			t.Fatalf("run %d: %d sockets still open when Run returned", i, n)
+		}
 	}
-	// The server observes a client close with some lag (seconds under -race
-	// on a loaded runner); a real leak never clears, so wait generously.
-	if !eventually(10*time.Second, func() bool { return cl.open.Load() == 0 }) {
-		t.Errorf("connections leaked: %d still open after 8 runs", cl.open.Load())
+	if n := dialer.open.Load(); n != 0 {
+		t.Errorf("sockets leaked: %d still open after 8 runs", n)
 	}
 	runtime.GC()
 	if !eventually(3*time.Second, func() bool { return runtime.NumGoroutine() <= baseline+2 }) {
@@ -124,8 +162,8 @@ func TestNoLeaksAcrossRuns(t *testing.T) {
 		n := runtime.Stack(buf, true)
 		t.Errorf("goroutines leaked: baseline %d, now %d\n%s", baseline, runtime.NumGoroutine(), buf[:n])
 	}
-	if cl.opened.Load() < 8*2 {
-		t.Errorf("sanity: only %d connections were ever opened", cl.opened.Load())
+	if dialer.opened.Load() < 8*2 {
+		t.Errorf("sanity: only %d connections were ever opened", dialer.opened.Load())
 	}
 }
 
@@ -226,5 +264,31 @@ func TestRepeatedRunsAreIndependent(t *testing.T) {
 		if len(res.Warnings) != 1 || !strings.Contains(res.Warnings[0], "duration cap") {
 			t.Errorf("run %d: warnings must not accumulate across runs: %v", i, res.Warnings)
 		}
+	}
+}
+
+// TestProbeCostIsNotGoodput pins the split between the two byte totals: the
+// byte cap counts the draft's fixed per-probe estimate (LIM-2), goodput counts
+// only what the load flows moved (LOAD-4). Merging them let a phase measure
+// its own probe traffic as capacity.
+func TestProbeCostIsNotGoodput(t *testing.T) {
+	var tripped atomic.Bool
+	c := &byteCounter{limit: 10_000, onLimit: func() { tripped.Store(true) }}
+	c.addProbe(foreignProbeBytes)
+	c.addProbe(selfProbeBytes)
+	if c.get() != 6000 || c.payloadBytes() != 0 {
+		t.Errorf("probe cost: total=%d payload=%d, want 6000/0", c.get(), c.payloadBytes())
+	}
+	if tripped.Load() {
+		t.Error("cap tripped early")
+	}
+	c.add(3000)
+	if c.get() != 9000 || c.payloadBytes() != 3000 {
+		t.Errorf("payload: total=%d payload=%d, want 9000/3000", c.get(), c.payloadBytes())
+	}
+	// The cap must fire on the combined total, probe cost included.
+	c.addProbe(foreignProbeBytes)
+	if !tripped.Load() {
+		t.Error("byte cap must count probe cost")
 	}
 }

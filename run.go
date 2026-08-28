@@ -25,7 +25,9 @@ func Run(ctx context.Context, t Target, o Options) (*Result, error) {
 	return RunWithEvents(ctx, t, o, nil)
 }
 
-// RunWithEvents is Run with a progress sink. sink may be nil.
+// RunWithEvents is Run with a progress sink. sink may be nil; otherwise it
+// must be safe for concurrent use, because flow and probe goroutines call it
+// (see Event).
 func RunWithEvents(ctx context.Context, t Target, o Options, sink func(Event)) (*Result, error) {
 	r := &runner{opts: o.withDefaults(), sink: sink}
 	return r.run(ctx, t)
@@ -255,18 +257,47 @@ type phaseState struct {
 	curF      []LatencySample // samples of the interval in progress
 	curS      []LatencySample
 
+	// stop can be called from any flow or probe goroutine (a flow error, the
+	// byte cap) as well as from the phase loop, so everything it writes is
+	// guarded: stopOnce picks the winner, stopMu makes the outcome readable.
 	stopOnce sync.Once
+	stopMu   sync.Mutex
 	reason   TruncationReason
-	cancel   context.CancelFunc
 	flowErr  error
 	flowErrs int
+	cancel   context.CancelFunc
 }
 
 func (p *phaseState) stop(reason TruncationReason) {
 	p.stopOnce.Do(func() {
+		p.stopMu.Lock()
 		p.reason = reason
+		p.stopMu.Unlock()
 		p.cancel()
 	})
+}
+
+func (p *phaseState) stopReason() TruncationReason {
+	p.stopMu.Lock()
+	defer p.stopMu.Unlock()
+	return p.reason
+}
+
+// flowFailed records a load-flow failure and aborts the phase (draft 5.4).
+func (p *phaseState) flowFailed(err error) {
+	p.stopMu.Lock()
+	p.flowErrs++
+	if p.flowErr == nil {
+		p.flowErr = err
+	}
+	p.stopMu.Unlock()
+	p.stop(ReasonFlowError)
+}
+
+func (p *phaseState) flowErrors() (int, error) {
+	p.stopMu.Lock()
+	defer p.stopMu.Unlock()
+	return p.flowErrs, p.flowErr
 }
 
 func (p *phaseState) addSample(self bool, s LatencySample) {
@@ -335,7 +366,6 @@ func (r *runner) loadPhase(ctx context.Context, dir Directions) (*DirectionResul
 	p.bytes = &byteCounter{limit: r.opts.MaxBytes, onLimit: func() { p.stop(ReasonBytesCap) }}
 
 	var wg sync.WaitGroup
-	var errMu sync.Mutex
 	addFlow := func() {
 		p.flowsMu.Lock()
 		f := &flow{id: len(p.flows), rt: r.factory.newTransport(true)}
@@ -348,14 +378,8 @@ func (r *runner) loadPhase(ctx context.Context, dir Directions) (*DirectionResul
 			defer wg.Done()
 			err := runFlow(pctx, f, dir, p.url, p.bytes, r.opts.Header, r.observeTLS)
 			if err != nil && !errors.Is(err, errFlowDone) {
-				errMu.Lock()
-				p.flowErrs++
-				if p.flowErr == nil {
-					p.flowErr = err
-				}
-				errMu.Unlock()
 				r.opts.Logger.Error("flow failed", "dir", dir.String(), "flow", f.id, "err", err)
-				p.stop(ReasonFlowError) // draft 5.4: abort on flow error
+				p.flowFailed(err) // draft 5.4: abort on flow error
 			}
 		}()
 	}
@@ -391,12 +415,11 @@ loop:
 				elapsed = sp.Interval
 			}
 			lastTick = now
-			cur := p.bytes.get()
 			f, sl := p.take()
-			d := p.eng.Interval(engine.Observation{Elapsed: elapsed, Bytes: cur, Flows: p.flowCount(), Foreign: f, Self: sl})
+			d := p.eng.Interval(engine.Observation{Elapsed: elapsed, Bytes: p.bytes.payloadBytes(), Flows: p.flowCount(), Foreign: f, Self: sl})
 			dr.Intervals = d.Interval
 			ev := Event{Kind: EventInterval, Phase: dir.String(), Direction: dir.String(),
-				Interval: d.Interval, Flows: p.flowCount(), ThroughputBPS: d.ThroughputBPS, Bytes: cur, RPM: d.RPM}
+				Interval: d.Interval, Flows: p.flowCount(), ThroughputBPS: d.ThroughputBPS, Bytes: p.bytes.get(), RPM: d.RPM}
 			r.emit(ev)
 			if d.Stop {
 				r.opts.Logger.Info("responsiveness stable", "dir", dir.String(), "rpm", d.RPM)
@@ -408,8 +431,10 @@ loop:
 			}
 		}
 	}
-	// Determine why we stopped, then tear everything down.
-	if p.reason == ReasonNone && pctx.Err() != nil && !p.eng.Stopped() {
+	// Determine why we stopped, then tear everything down. stop() is
+	// once-guarded, so a flow or probe goroutine that already named a reason
+	// wins; reading p.reason here to pre-empt it would race with them.
+	if pctx.Err() != nil {
 		p.stop(ctxReason(pctx))
 	}
 	cancel()
@@ -424,14 +449,15 @@ loop:
 	dr.Duration = r.opts.clock.Now().Sub(start)
 	dr.Bytes = p.bytes.get()
 	dr.Flows = p.flowCount()
-	dr.FlowErrors = p.flowErrs
+	flowErrs, flowErr := p.flowErrors()
+	dr.FlowErrors = flowErrs
 	dr.HTTPVersion = p.proto()
 	curF, curS := p.take()
 	sum := p.eng.Summary(curF, curS)
 	dr.ThroughputBPS = sum.ThroughputBPS
 	dr.PeakThroughputBPS = sum.PeakThroughputBPS
 	if dr.Duration > 0 {
-		dr.MeanThroughputBPS = float64(dr.Bytes) * 8 / dr.Duration.Seconds()
+		dr.MeanThroughputBPS = float64(p.bytes.payloadBytes()) * 8 / dr.Duration.Seconds()
 	}
 	if dr.Intervals == 0 {
 		dr.ThroughputBPS = dr.MeanThroughputBPS
@@ -440,8 +466,8 @@ loop:
 	dr.ThroughputConfidence = sum.ThroughputConfidence
 	dr.ResponsivenessStable = sum.ResponsivenessStable
 	dr.ResponsivenessConfidence = sum.ResponsivenessConfidence
-	dr.Reason = p.reason
-	dr.Truncated = p.reason != ReasonNone
+	dr.Reason = p.stopReason()
+	dr.Truncated = dr.Reason != ReasonNone
 	dr.RPM, dr.ForeignRPM, dr.SelfRPM = sum.RPM, sum.ForeignRPM, sum.SelfRPM
 	if len(sum.Foreign) > 0 {
 		st := engine.ComputeLatencyStats(sum.Foreign)
@@ -469,7 +495,7 @@ loop:
 	case ReasonDurationCap:
 		r.warn("%s: duration cap (%s) hit before stabilisation; result truncated", dir, r.opts.MaxDuration)
 	case ReasonFlowError:
-		r.warn("%s: a load flow failed (%v); phase aborted per draft", dir, p.flowErr)
+		r.warn("%s: a load flow failed (%v); phase aborted per draft", dir, flowErr)
 	}
 	if dr.HTTPVersion != "" && dr.HTTPVersion != "HTTP/2.0" {
 		r.warn("%s: server negotiated %s; self probes unavailable, RPM uses foreign probes only", dir, dr.HTTPVersion)
@@ -478,7 +504,7 @@ loop:
 		return dr, ctx.Err()
 	}
 	if dr.Reason == ReasonFlowError && dr.Intervals == 0 {
-		return dr, fmt.Errorf("netquality: %s: load flow failed: %w", dir, p.flowErr)
+		return dr, fmt.Errorf("netquality: %s: load flow failed: %w", dir, flowErr)
 	}
 	return dr, nil
 }
@@ -516,10 +542,10 @@ func (r *runner) probeLoop(ctx context.Context, p *phaseState) {
 				if pr := f.proto.Load(); pr == nil || *pr != "HTTP/2.0" {
 					return // cannot multiplex on HTTP/1.1
 				}
-				p.bytes.add(selfProbeBytes)
+				p.bytes.addProbe(selfProbeBytes)
 				s, err = selfProbe(ctx, f.rt, r.cfg.SmallDownloadURL, r.opts.Header, r.opts.clock.Now)
 			} else {
-				p.bytes.add(foreignProbeBytes)
+				p.bytes.addProbe(foreignProbeBytes)
 				s, err = foreignProbe(ctx, foreignRT, r.cfg.SmallDownloadURL, r.opts.Header, r.opts.clock.Now, r.observeTLS)
 			}
 			if err != nil {

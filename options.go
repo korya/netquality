@@ -86,6 +86,8 @@ type Options struct {
 	// Header is added to every request the test sends (config fetch, probes,
 	// load flows): credentials for a protected server, for example
 	// Authorization: Bearer <token>. Keys set here override the defaults.
+	// It is read from every flow and probe goroutine, so it must not be
+	// mutated while Run is in flight.
 	Header http.Header
 
 	// clock is injectable for tests; nil means the wall clock.

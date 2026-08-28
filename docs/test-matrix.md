@@ -32,6 +32,7 @@ directory relative to the repo root; `.` is the library.
 | TLS normalisation | TLS 1.2 handshake counted as 2 RTTs, TLS 1.3 as 1 | . | TestTLS12Normalisation |
 | Statistics | min/median/mean/max/jitter; no percentile at 4 samples | internal/engine | TestStatsOf |
 | Statistics | Percentile presence thresholds 5/10/20/100 and values; never equal to the max; highest-present helper | internal/engine | TestPercentilePresenceThresholds |
+| Statistics | Real run: 5 idle probes → p80 only, 20 → p95 not p99; loaded sets at the default probe rate carry p80–p99, monotonic | . | TestPercentilesEndToEnd |
 | Statistics | Percentile and single-sided trimmed mean | internal/engine | TestPercentileAndTrimmedMean |
 | Statistics | Stage medians only from staged samples | internal/engine | TestComputeLatencyStatsStages |
 

@@ -3,7 +3,6 @@ package netquality
 import (
 	"context"
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
@@ -32,24 +31,33 @@ func TestByteCounterLimits(t *testing.T) {
 	}
 }
 
-// TestNoByteCapByDefault: a default-options run on loopback (~15 Gbps) is
-// bounded by time only and never reports bytes_cap.
+// TestNoByteCapByDefault: a default-options run on loopback is bounded by
+// time only, never reports bytes_cap in either direction, and moves more
+// than the old 250 MiB cap — proving the cap is gone, not merely unreported.
 func TestNoByteCapByDefault(t *testing.T) {
 	target, client := newTestServer(t, server.Options{})
-	res, err := Run(context.Background(), target, Options{HTTPClient: client, Directions: Download, IdleProbes: -1,
-		MaxDuration: 1500 * time.Millisecond, Stability: fastStability()})
-	if err != nil {
-		t.Fatal(err)
-	}
-	d := res.Download
-	if d.Reason == ReasonBytesCap || hasWarning(res, "byte cap") {
-		t.Errorf("default run must not be byte-capped: %+v %v", d, res.Warnings)
-	}
-	if d.Bytes < 1<<30 {
-		t.Logf("note: only %s moved in 1.5s on loopback", strings.TrimSpace(hB(d.Bytes)))
-	}
-	if d.Reason != ReasonNone && d.Reason != ReasonDurationCap {
-		t.Errorf("reason = %q", d.Reason)
+	for _, dir := range []Directions{Download, Upload} {
+		t.Run(dir.String(), func(t *testing.T) {
+			res, err := Run(context.Background(), target, Options{HTTPClient: client, Directions: dir, IdleProbes: -1,
+				MaxDuration: 3 * time.Second, Stability: fastStability()})
+			if err != nil {
+				t.Fatal(err)
+			}
+			d := res.Download
+			if dir == Upload {
+				d = res.Upload
+			}
+			if d.Reason == ReasonBytesCap || hasWarning(res, "byte cap") {
+				t.Errorf("default run must not be byte-capped: %+v %v", d, res.Warnings)
+			}
+			if d.Reason != ReasonNone && d.Reason != ReasonDurationCap {
+				t.Errorf("reason = %q", d.Reason)
+			}
+			const oldCap = 250 << 20
+			if d.Bytes <= oldCap {
+				t.Errorf("%s moved only %s in 3 s; the old 250 MiB cap would not have been exceeded", dir, hB(d.Bytes))
+			}
+		})
 	}
 }
 

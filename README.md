@@ -146,6 +146,15 @@ go test ./...            # unit + loopback integration (in-process nqserver)
 NQ_LIVE=1 go test -run TestLive -v .   # hits Apple and Cloudflare
 ```
 
+## Releasing
+
+1. Move the `[Unreleased]` items in `CHANGELOG.md` under a new `## [X.Y.Z] - date` heading.
+2. Commit, then `git tag -a vX.Y.Z -m "netquality vX.Y.Z" && git push origin master vX.Y.Z`.
+
+The `Release` workflow runs the tests, builds `nq` and `nqserver` for all six
+platforms, and publishes a GitHub release whose notes are that changelog
+section. It fails if the section is missing.
+
 ## Licence
 
 Apache-2.0. Written from the draft and Apple's MIT-licensed `SERVER_SPEC.md`;

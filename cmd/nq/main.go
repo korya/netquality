@@ -16,6 +16,7 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/korya/netquality"
@@ -122,8 +123,14 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 	var sink func(netquality.Event)
 	if *events {
+		// Events arrive from several goroutines; serialise writes.
+		var mu sync.Mutex
 		enc := json.NewEncoder(stderr)
-		sink = func(e netquality.Event) { _ = enc.Encode(e) }
+		sink = func(e netquality.Event) {
+			mu.Lock()
+			defer mu.Unlock()
+			_ = enc.Encode(e)
+		}
 	} else if !*jsonOut {
 		sink = progressPrinter(stderr)
 	}
@@ -147,7 +154,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 }
 
 func progressPrinter(w io.Writer) func(netquality.Event) {
+	var mu sync.Mutex
 	return func(e netquality.Event) {
+		mu.Lock()
+		defer mu.Unlock()
 		switch e.Kind {
 		case netquality.EventPhase:
 			if e.Phase != "done" {

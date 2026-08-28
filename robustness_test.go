@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -75,7 +76,12 @@ func TestStalledLargeBody(t *testing.T) {
 	}, nil, true)
 	o := robustOpts(Download)
 	start := time.Now()
-	res, err := Run(context.Background(), Target{ConfigURL: srv.URL + server.ConfigPath}, o)
+	var foreignProbes atomic.Int64
+	res, err := RunWithEvents(context.Background(), Target{ConfigURL: srv.URL + server.ConfigPath}, o, func(e Event) {
+		if e.Kind == EventProbe && e.ProbeKind == "foreign" {
+			foreignProbes.Add(1)
+		}
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +93,9 @@ func TestStalledLargeBody(t *testing.T) {
 	if !d.Truncated || d.Reason != ReasonDurationCap || d.ThroughputBPS > 1e6 || d.ThroughputConfidence == ConfidenceHigh {
 		t.Errorf("stalled download must be honest: %+v", d)
 	}
-	if d.Loaded.Foreign == nil {
+	// Probes keep running while the body is stalled (counted over the whole
+	// phase: the final window alone may be empty on a slow runner).
+	if foreignProbes.Load() == 0 {
 		t.Error("foreign probes still run while the body is stalled")
 	}
 }

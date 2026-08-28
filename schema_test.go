@@ -75,7 +75,8 @@ func TestResultSchemaGolden(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v — run UPDATE_GOLDEN=1 go test -run TestResultSchemaGolden .", err)
 	}
-	if string(want) != b.String() {
+	// Windows checkouts may carry CRLF; the fixture is LF.
+	if strings.ReplaceAll(string(want), "\r\n", "\n") != b.String() {
 		t.Errorf("Result JSON schema changed; if intended, bump docs and run UPDATE_GOLDEN=1.\n--- fixture\n%s--- now\n%s", want, b.String())
 	}
 	for _, k := range keys {

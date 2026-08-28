@@ -1,0 +1,2 @@
+# Golden fixtures are byte-compared; keep LF everywhere.
+testdata/** text eol=lf

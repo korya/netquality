@@ -78,9 +78,13 @@ func TestResultJSONRoundTrip(t *testing.T) {
 	if err := json.Unmarshal(data, &back); err != nil {
 		t.Fatal(err)
 	}
-	// StartedAt loses monotonic clock reading on the wire; compare by value.
-	res.StartedAt = res.StartedAt.Round(0)
-	back.StartedAt = back.StartedAt.Round(0)
+	// time.Time carries a monotonic reading and a *Location that RFC 3339
+	// cannot preserve (CI runs in UTC, where the parsed Location is a
+	// different pointer from Local): compare instants, then the rest.
+	if !res.StartedAt.Equal(back.StartedAt) {
+		t.Errorf("started_at changed: %v -> %v", res.StartedAt, back.StartedAt)
+	}
+	res.StartedAt, back.StartedAt = time.Time{}, time.Time{}
 	if !reflect.DeepEqual(res, &back) {
 		again, _ := json.Marshal(&back)
 		t.Errorf("round trip changed the result:\n%s\n%s", data, again)

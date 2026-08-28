@@ -15,6 +15,9 @@ All notable changes to this project are documented here. The format follows
   cost still counts against `MaxBytes` and `bytes` (LIM-2); `throughput_bps`,
   `peak_throughput_bps` and `mean_throughput_bps` now count load-flow bytes
   only (LOAD-4, LOAD-11).
+- Data race in the load phase: the reason a phase stopped was read on the
+  phase goroutine before the flow and probe goroutines were joined, while any
+  of them could still be writing it.
 
 ## [0.3.0] - 2026-08-28
 

@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "urls": {
+    "large_download_url": "https://example.com/nq/large",
+    "small_download_url": "https://example.com/nq/small",
+    "upload_url":         "https://example.com/nq/upload"
+  },
+  "test_endpoint": "nq1.example.com"
+}

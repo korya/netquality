@@ -1,0 +1,11 @@
+{ "version": 1,
+  "test_endpoint": "cator4-edge-fx-015.aaplimg.com",
+  "urls": {
+      "small_https_download_url": "https://mensura.cdn-apple.com/api/v1/gm/small",
+      "large_https_download_url": "https://mensura.cdn-apple.com/api/v1/gm/large",
+      "https_upload_url": "https://mensura.cdn-apple.com/api/v1/gm/slurp",
+      "small_download_url": "https://mensura.cdn-apple.com/api/v1/gm/small",
+      "large_download_url": "https://mensura.cdn-apple.com/api/v1/gm/large",
+      "upload_url": "https://mensura.cdn-apple.com/api/v1/gm/slurp"
+   }
+}

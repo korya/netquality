@@ -5,6 +5,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-08-27
+
 ### Added
 - `netquality` library implementing draft-ietf-ippm-responsiveness-09:
   config discovery (`/.well-known/nq`, Apple and Cloudflare documents,
@@ -19,3 +21,6 @@ All notable changes to this project are documented here. The format follows
 - `cmd/nqserver` reference server (HTTP/2, `--self-signed`).
 - Unit, loopback integration and opt-in live (`NQ_LIVE=1`) tests; CI on
   Linux/macOS/Windows plus a six-target cross-compile matrix.
+
+[Unreleased]: https://github.com/korya/netquality/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/korya/netquality/releases/tag/v0.1.0

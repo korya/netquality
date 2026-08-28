@@ -151,6 +151,9 @@ func TestExplicitProxyDetected(t *testing.T) {
 	if res.Download.HTTPVersion != "HTTP/2.0" {
 		t.Errorf("http version through proxy = %q", res.Download.HTTPVersion)
 	}
+	if len(res.Target.LocalIPs) != 1 || res.Target.LocalIPs[0] != "127.0.0.1" {
+		t.Errorf("local_ips via proxy = %v", res.Target.LocalIPs)
+	}
 	var sawProxy, sawEndpoint bool
 	for _, w := range res.Warnings {
 		sawProxy = sawProxy || strings.Contains(w, "explicit proxy")

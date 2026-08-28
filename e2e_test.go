@@ -211,6 +211,9 @@ func TestCustomRoundTripperWarns(t *testing.T) {
 	if res.Target.Proxy != nil {
 		t.Error("proxy cannot be inspected through a custom RoundTripper")
 	}
+	if res.Target.LocalIPs != nil || res.Target.ResolvedIPs != nil {
+		t.Errorf("addresses are unknowable through a custom RoundTripper: %+v", res.Target)
+	}
 }
 
 func TestConfigTimeoutAndStatus(t *testing.T) {

@@ -5,6 +5,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- `target.local_ips`: the local source addresses the test's connections used,
+  for correlating a stored result with the network it was taken on (#5).
+
+### Changed
+- `target.resolved_ips` (and `local_ips`) are now populated on cancelled
+  partial results as well.
+
 ## [0.2.0] - 2026-08-28
 
 ### Changed

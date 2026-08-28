@@ -183,6 +183,9 @@ func printHuman(w io.Writer, r *netquality.Result) {
 	if len(r.Target.ResolvedIPs) > 0 {
 		fmt.Fprintf(w, " %s", strings.Join(r.Target.ResolvedIPs, ","))
 	}
+	if len(r.Target.LocalIPs) > 0 {
+		fmt.Fprintf(w, " via %s", strings.Join(r.Target.LocalIPs, ","))
+	}
 	fmt.Fprintln(w)
 	if p := r.Target.Proxy; p != nil {
 		var parts []string

@@ -62,6 +62,11 @@ if err != nil { /* discovery failed, or ctx cancelled (res is then partial) */ }
 fmt.Println(res.Download.RPM, res.Download.ThroughputBPS, res.Download.Truncated)
 ```
 
+`Result.Target` records the server IPs the flows reached (`resolved_ips`) and
+the local source addresses they went out on (`local_ips`), so a stored result
+can be tied to the interface or network it was measured on. Both are present
+on cancelled partial results too, and both stay in the result if you share it.
+
 Targets: `netquality.Apple`, `netquality.Cloudflare`, `netquality.WellKnown("host:port")`,
 or `netquality.Target{ConfigURL: "..."}`.
 

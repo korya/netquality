@@ -22,7 +22,41 @@ type transportFactory struct {
 	urlHost      string // host[:port] from the config URLs
 	urlHostPort  string // urlHost with the scheme's default port filled in
 	dialTimeout  time.Duration
-	resolvedIPs  atomic.Pointer[[]string]
+	remote       addrSet // server IPs the flows connected to
+	local        addrSet // source IPs the flows went out on
+}
+
+// addrSet is a small lock-free, deduplicating, insertion-ordered set of
+// address strings, safe for concurrent use from dial callbacks.
+type addrSet struct{ p atomic.Pointer[[]string] }
+
+func (s *addrSet) add(a string) {
+	if a == "" {
+		return
+	}
+	for {
+		cur := s.p.Load()
+		var next []string
+		if cur != nil {
+			for _, x := range *cur {
+				if x == a {
+					return
+				}
+			}
+			next = append(next, *cur...)
+		}
+		next = append(next, a)
+		if s.p.CompareAndSwap(cur, &next) {
+			return
+		}
+	}
+}
+
+func (s *addrSet) list() []string {
+	if p := s.p.Load(); p != nil {
+		return append([]string(nil), *p...)
+	}
+	return nil
 }
 
 func newTransportFactory(client *http.Client, cfg *ServerConfig, u *url.URL) (*transportFactory, []string) {
@@ -96,37 +130,14 @@ func (f *transportFactory) newTransport(keepAlive bool) http.RoundTripper {
 			return nil, err
 		}
 		if ra := c.RemoteAddr(); ra != nil {
-			f.recordIP(hostOnly(ra.String()))
+			f.remote.add(hostOnly(ra.String()))
+		}
+		if la := c.LocalAddr(); la != nil {
+			f.local.add(hostOnly(la.String()))
 		}
 		return c, nil
 	}
 	return t
-}
-
-func (f *transportFactory) recordIP(ip string) {
-	for {
-		cur := f.resolvedIPs.Load()
-		var next []string
-		if cur != nil {
-			for _, x := range *cur {
-				if x == ip {
-					return
-				}
-			}
-			next = append(next, *cur...)
-		}
-		next = append(next, ip)
-		if f.resolvedIPs.CompareAndSwap(cur, &next) {
-			return
-		}
-	}
-}
-
-func (f *transportFactory) ips() []string {
-	if p := f.resolvedIPs.Load(); p != nil {
-		return append([]string(nil), *p...)
-	}
-	return nil
 }
 
 // closeIdle releases pooled connections of a transport we created.

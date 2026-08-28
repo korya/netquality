@@ -28,6 +28,12 @@ type ResolvedTarget struct {
 	Host         string   `json:"host"`
 	TestEndpoint string   `json:"test_endpoint,omitempty"`
 	ResolvedIPs  []string `json:"resolved_ips,omitempty"`
+	// LocalIPs are the source addresses the test's connections went out on,
+	// deduplicated, ports stripped, IPv6 zone IDs kept. They identify the
+	// interface/network a stored result was taken on. Under an explicit proxy
+	// this is the address used toward the proxy. Empty with a custom
+	// RoundTripper or DialTLSContext, which bypass the library's dialer.
+	LocalIPs []string `json:"local_ips,omitempty"`
 	// HTTPVersion is the protocol negotiated by load flows ("HTTP/2.0", "HTTP/1.1").
 	HTTPVersion string       `json:"http_version,omitempty"`
 	Config      ServerConfig `json:"config"`

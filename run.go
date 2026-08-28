@@ -83,7 +83,13 @@ func (r *runner) warn(format string, args ...any) {
 func (r *runner) run(ctx context.Context, t Target) (*Result, error) {
 	start := r.opts.clock.Now()
 	r.res = &Result{StartedAt: start, Target: ResolvedTarget{ConfigURL: t.ConfigURL}}
-	finish := func() { r.res.Duration = r.opts.clock.Now().Sub(start) }
+	finish := func() {
+		r.res.Duration = r.opts.clock.Now().Sub(start)
+		if r.factory != nil { // also on cancelled exits: the network is what the caller wants to know
+			r.res.Target.ResolvedIPs = r.factory.remote.list()
+			r.res.Target.LocalIPs = r.factory.local.list()
+		}
+	}
 
 	r.emit(Event{Kind: EventPhase, Phase: "discover", Message: t.ConfigURL})
 	cfg, err := r.discover(ctx, t)
@@ -155,7 +161,6 @@ func (r *runner) run(ctx context.Context, t Target) (*Result, error) {
 			return nil, err
 		}
 	}
-	r.res.Target.ResolvedIPs = r.factory.ips()
 	r.emit(Event{Kind: EventPhase, Phase: "done"})
 	finish()
 	return r.res, nil

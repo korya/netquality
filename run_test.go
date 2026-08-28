@@ -87,6 +87,9 @@ func TestRunLoopback(t *testing.T) {
 	if res.Target.HTTPVersion != "HTTP/2.0" || len(res.Target.ResolvedIPs) == 0 {
 		t.Errorf("target = %+v", res.Target)
 	}
+	if len(res.Target.LocalIPs) != 1 || res.Target.LocalIPs[0] != "127.0.0.1" {
+		t.Errorf("local_ips = %v", res.Target.LocalIPs)
+	}
 	var phases []string
 	for _, e := range events {
 		if e.Kind == EventPhase {
@@ -188,6 +191,9 @@ func TestCancellation(t *testing.T) {
 	if res.Download == nil || res.Download.Reason != ReasonCancelled || res.Upload != nil {
 		t.Errorf("download=%+v upload=%v", res.Download, res.Upload)
 	}
+	if len(res.Target.ResolvedIPs) == 0 || len(res.Target.LocalIPs) == 0 {
+		t.Errorf("partial result must still say which network it ran on: %+v", res.Target)
+	}
 }
 
 func TestMaxFlowsWithFakeClock(t *testing.T) {
@@ -252,6 +258,13 @@ func TestResultJSONShape(t *testing.T) {
 	}
 	if _, ok := m["upload"]; ok {
 		t.Error("absent direction must be omitted")
+	}
+	if tgt := m["target"].(map[string]any); tgt["local_ips"] != nil || tgt["resolved_ips"] != nil {
+		t.Errorf("empty address lists must be omitted: %v", tgt)
+	}
+	withIPs, _ := json.Marshal(ResolvedTarget{LocalIPs: []string{"10.0.0.2"}, ResolvedIPs: []string{"1.2.3.4"}})
+	if !strings.Contains(string(withIPs), `"resolved_ips":["1.2.3.4"]`) || !strings.Contains(string(withIPs), `"local_ips":["10.0.0.2"]`) {
+		t.Errorf("json = %s", withIPs)
 	}
 	dl := m["download"].(map[string]any)
 	for _, k := range []string{"throughput_bps", "mean_throughput_bps", "bytes", "duration_ns", "truncated", "reason", "loaded", "rpm", "foreign_rpm", "self_rpm", "throughput_confidence"} {

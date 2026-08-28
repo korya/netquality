@@ -77,7 +77,12 @@ directory relative to the repo root; `.` is the library.
 
 | Feature | Scenario | Package | Test |
 |---|---|---|---|
-| JSON | snake_case keys, absent directions omitted | . | TestResultJSONShape |
+| JSON | snake_case keys, absent directions and empty address lists omitted | . | TestResultJSONShape |
+| Local addresses | Loopback run reports `local_ips` = 127.0.0.1 | . | TestRunLoopback |
+| Local addresses | Recorded under an explicit proxy (interface toward the proxy) | . | TestExplicitProxyDetected |
+| Local addresses | Empty with a custom RoundTripper | . | TestCustomRoundTripperWarns |
+| Local addresses | Present on cancelled/partial results, as is `resolved_ips` | . | TestCancellation |
+| Local addresses | Address set dedupes, keeps zone IDs, is concurrency-safe | . | TestAddrSet |
 | Library example | Compiles and documents usage | . | Example |
 
 ## CLI (`cmd/nq`)

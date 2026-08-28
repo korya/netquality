@@ -50,3 +50,8 @@ jobs:
             gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md
           fi
           gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+      - name: Trigger pkg.go.dev indexing
+        run: |
+          # Asking the module proxy for the version makes it fetch the tag;
+          # pkg.go.dev then picks it up from the proxy index within minutes.
+          curl -sSf "https://proxy.golang.org/github.com/korya/netquality/@v/$GITHUB_REF_NAME.info"

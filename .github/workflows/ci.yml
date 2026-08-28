@@ -26,6 +26,7 @@ jobs:
       - uses: actions/setup-go@v5
         with: { go-version-file: go.mod }
       - run: go test -race -count=1 -coverprofile=coverage.out ./...
+        shell: bash # PowerShell splits "-coverprofile=coverage.out" and passes ".out" as a package
       - name: Coverage summary
         if: runner.os == 'Linux'
         run: go tool cover -func=coverage.out | tail -1 | tee -a "$GITHUB_STEP_SUMMARY"

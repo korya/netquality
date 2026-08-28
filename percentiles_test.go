@@ -13,16 +13,17 @@ import (
 // twenty yield p95, and loaded sets probed at the default rate carry p99.
 func TestPercentilesEndToEnd(t *testing.T) {
 	target, client := newTestServer(t, server.Options{})
-	// 200 probes/s split across two kinds and a 500 ms interval put ~200
-	// samples of each kind in the four-interval window the final figures use
-	// (the default 100/s lands just under the 100 needed for p99).
+	// 200 probes/s split across two kinds over a four-second window (1 s
+	// intervals × MAD 4) attempts ~400 samples of each kind; slow CI runners
+	// complete a fraction of that (TLS handshakes, 64 in flight), which still
+	// clears the 100 needed for p99 with margin.
 	p := DefaultStabilityParams()
-	p.Interval = 500 * time.Millisecond
+	p.Interval = time.Second
 	p.MaxProbesPerSecond = 200
 	p.StdDevTolerance = 1e-9 // never stop early: keep probing for the whole budget
 	res, err := Run(context.Background(), target, Options{
 		HTTPClient: client, Directions: Download, IdleProbes: DefaultIdleProbes, MaxFlows: 4,
-		MaxDuration: 2500 * time.Millisecond, MaxBytes: 1 << 40, Stability: p,
+		MaxDuration: 4500 * time.Millisecond, MaxBytes: 1 << 40, Stability: p,
 	})
 	if err != nil {
 		t.Fatal(err)

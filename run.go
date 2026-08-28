@@ -82,7 +82,7 @@ func (r *runner) warn(format string, args ...any) {
 
 func (r *runner) run(ctx context.Context, t Target) (*Result, error) {
 	start := r.opts.clock.Now()
-	r.res = &Result{StartedAt: start, Target: ResolvedTarget{ConfigURL: t.ConfigURL}}
+	r.res = &Result{SchemaVersion: ResultSchemaVersion, StartedAt: start, Target: ResolvedTarget{ConfigURL: t.ConfigURL}}
 	finish := func() {
 		r.res.Duration = r.opts.clock.Now().Sub(start)
 		if r.factory != nil { // also on cancelled exits: the network is what the caller wants to know

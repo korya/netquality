@@ -27,12 +27,19 @@ const (
 	ConfidenceHigh   = engine.ConfidenceHigh
 )
 
+// ResultSchemaVersion identifies the JSON shape of Result. It is bumped when a
+// field is renamed, removed, retyped, or changes meaning; adding fields never
+// bumps it. Each bump is noted in the CHANGELOG.
+const ResultSchemaVersion = 1
+
 // Result is the outcome of a run. It serialises to JSON with stable snake_case
 // names; the CLI's --json output is exactly this struct.
 type Result struct {
-	Target    ResolvedTarget `json:"target"`
-	StartedAt time.Time      `json:"started_at"`
-	Duration  time.Duration  `json:"duration_ns"`
+	// SchemaVersion is ResultSchemaVersion at the time the result was produced.
+	SchemaVersion int            `json:"schema_version"`
+	Target        ResolvedTarget `json:"target"`
+	StartedAt     time.Time      `json:"started_at"`
+	Duration      time.Duration  `json:"duration_ns"`
 	// Idle is the idle latency measured on fresh connections before any load.
 	// Nil when IdleProbes < 0 or no probe succeeded.
 	Idle *LatencyStats `json:"idle,omitempty"`

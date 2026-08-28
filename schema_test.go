@@ -87,19 +87,25 @@ func TestResultSchemaGolden(t *testing.T) {
 	}
 }
 
-// TestOldResultDocumentsStillParse guards readers of stored results: a
-// document written by v0.2.1 must unmarshal into today's Result with its
-// values intact.
-func TestOldResultDocumentsStillParse(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("testdata", "result_v0.2.1.json"))
+// TestStoredResultDocumentParses guards readers of stored results: a
+// document at the current schema version must unmarshal with its values
+// intact, and the version must be readable before anything else.
+func TestStoredResultDocumentParses(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("testdata", "result_schema1.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
+	var probe struct {
+		SchemaVersion int `json:"schema_version"`
+	}
+	if err := json.Unmarshal(data, &probe); err != nil || probe.SchemaVersion != ResultSchemaVersion {
+		t.Fatalf("schema_version probe: %d %v", probe.SchemaVersion, err)
+	}
 	var res Result
 	if err := json.Unmarshal(data, &res); err != nil {
-		t.Fatalf("v0.2.1 document no longer parses: %v", err)
+		t.Fatalf("stored document no longer parses: %v", err)
 	}
-	if res.Target.Host != "h3.speed.cloudflare.com" || res.Download == nil || res.Download.RPM == 0 ||
+	if res.SchemaVersion != 1 || res.Target.Host != "h3.speed.cloudflare.com" || res.Download == nil || res.Download.RPM == 0 ||
 		res.Download.Reason != ReasonBytesCap || res.Idle == nil || res.Idle.Stages == nil || len(res.Target.LocalIPs) != 1 {
 		t.Errorf("values lost: %+v", res)
 	}

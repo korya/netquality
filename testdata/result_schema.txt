@@ -67,6 +67,7 @@ idle.stages.dns_ns int64
 idle.stages.tls_ns int64
 idle.stages.tls_per_rtt_ns int64
 idle.stages.ttfb_ns int64
+schema_version int
 started_at time
 target.config.large_download_url string
 target.config.small_download_url string

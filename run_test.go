@@ -5,9 +5,12 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"log"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -20,6 +23,7 @@ func newTestServer(t *testing.T, o server.Options) (Target, *http.Client) {
 	t.Helper()
 	srv := httptest.NewUnstartedServer(server.Handler(o))
 	srv.EnableHTTP2 = true
+	srv.Config.ErrorLog = log.New(io.Discard, "", 0) // aborted probes log TLS handshake errors
 	srv.StartTLS()
 	t.Cleanup(srv.Close)
 	tr := http.DefaultTransport.(*http.Transport).Clone()
@@ -36,14 +40,21 @@ func fastStability() StabilityParams {
 
 func TestRunLoopback(t *testing.T) {
 	target, client := newTestServer(t, server.Options{})
-	var events []Event
+	var (
+		mu     sync.Mutex
+		events []Event
+	)
 	res, err := RunWithEvents(context.Background(), target, Options{
 		HTTPClient:  client,
 		MaxDuration: 3 * time.Second,
 		MaxBytes:    1 << 40,
 		MaxFlows:    4,
 		Stability:   fastStability(),
-	}, func(e Event) { events = append(events, e) })
+	}, func(e Event) {
+		mu.Lock()
+		defer mu.Unlock()
+		events = append(events, e)
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

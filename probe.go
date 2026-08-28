@@ -3,7 +3,6 @@ package netquality
 import (
 	"context"
 	"crypto/tls"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptrace"
@@ -93,9 +92,11 @@ func foreignProbe(ctx context.Context, rt http.RoundTripper, url string, now fun
 		wr = start
 	}
 	s.HTTP = end.Sub(wr)
+	// A reused connection (only possible with a custom RoundTripper) still
+	// yields a request-time sample, just without connection stages.
 	s.Staged = !pt.reused
 	if pt.reused {
-		return s, fmt.Errorf("foreign probe reused a connection")
+		s.DNS, s.Connect, s.TLS, s.TLSRTTs = 0, 0, 0, 0
 	}
 	return s, nil
 }

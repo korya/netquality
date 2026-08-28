@@ -146,7 +146,11 @@ func SelfSignedCert(hosts ...string) (tls.Certificate, error) {
 	if err != nil {
 		return tls.Certificate{}, err
 	}
-	return tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key, Leaf: tmpl}, nil
+	leaf, err := x509.ParseCertificate(der)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+	return tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key, Leaf: leaf}, nil
 }
 
 // TLSConfig returns a server TLS config with HTTP/2 enabled for cert.

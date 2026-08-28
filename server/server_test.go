@@ -90,3 +90,53 @@ func TestSelfSignedCert(t *testing.T) {
 	}
 	_ = tls.Config{}
 }
+
+func TestHandlerBaseURLAndMethods(t *testing.T) {
+	srv := httptest.NewTLSServer(Handler(Options{BaseURL: "https://nq.example.test", LargeSize: 3}))
+	defer srv.Close()
+	client := srv.Client()
+
+	resp, err := client.Get(srv.URL + ConfigPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg struct {
+		URLs         map[string]string `json:"urls"`
+		TestEndpoint *string           `json:"test_endpoint"`
+	}
+	_ = json.NewDecoder(resp.Body).Decode(&cfg)
+	_ = resp.Body.Close()
+	if cfg.URLs["small_download_url"] != "https://nq.example.test"+SmallPath || cfg.TestEndpoint != nil {
+		t.Errorf("%+v", cfg)
+	}
+
+	resp, err = client.Get(srv.URL + LargePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := io.ReadAll(resp.Body)
+	_ = resp.Body.Close()
+	if len(b) != 3 || resp.Header.Get("Content-Length") != "3" || resp.Header.Get("Content-Type") != "application/octet-stream" {
+		t.Errorf("large: %d bytes, headers %v", len(b), resp.Header)
+	}
+
+	for _, tc := range []struct{ method, path string }{{http.MethodPost, LargePath}, {http.MethodGet, UploadPath}, {http.MethodDelete, SmallPath}} {
+		req, _ := http.NewRequest(tc.method, srv.URL+tc.path, nil)
+		resp, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+		if resp.StatusCode != http.StatusMethodNotAllowed {
+			t.Errorf("%s %s: %s", tc.method, tc.path, resp.Status)
+		}
+	}
+	resp, err = client.Head(srv.URL + SmallPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("HEAD small: %s", resp.Status)
+	}
+}

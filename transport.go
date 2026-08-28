@@ -47,7 +47,7 @@ func newTransportFactory(client *http.Client, cfg *ServerConfig, u *url.URL) (*t
 		f.base = t
 	} else {
 		f.custom = rt
-		warnings = append(warnings, "custom RoundTripper in use: load flows may share connections and test_endpoint is ignored")
+		warnings = append(warnings, "custom RoundTripper in use: load flows may share connections, probes may reuse connections (no per-stage timings), test_endpoint is ignored")
 	}
 	return f, warnings
 }

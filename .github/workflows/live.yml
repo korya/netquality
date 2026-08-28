@@ -1,0 +1,18 @@
+name: Live
+# Nightly run against the public Apple and Cloudflare servers. Failures here
+# can be theirs or the runner's network, not ours, so this job never blocks.
+on:
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version-file: go.mod }
+      - run: NQ_LIVE=1 go test -count=1 -run TestLive -v . 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"

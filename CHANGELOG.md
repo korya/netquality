@@ -11,9 +11,18 @@ All notable changes to this project are documented here. The format follows
   Certificate Transparency SCTs), each with a warning. CLI prints a `Proxy`
   line.
 
+- Test matrix (`docs/test-matrix.md`) enforced by `TestMatrix`; end-to-end
+  tests for HTTP/1.1 fallback, flow errors, `test_endpoint`, TLS 1.2
+  normalisation, upload byte cap, custom RoundTrippers, config timeouts,
+  the CLI, and the `nqserver` binary. Nightly `Live` workflow.
+
 ### Fixed
 - `test_endpoint` dial override no longer rewrites dials to a proxy that
   shares the origin's host.
+- Foreign probes over a custom RoundTripper that reuses connections now yield
+  unstaged samples instead of failing outright.
+- `server.SelfSignedCert` returns the parsed leaf certificate, so it can be
+  added to a cert pool.
 
 ## [0.1.1] - 2026-08-28
 

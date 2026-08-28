@@ -212,3 +212,63 @@ func TestServeWithCertFilesAndBaseURL(t *testing.T) {
 	_ = elliptic.P256
 	_ = rand.Reader
 }
+
+func TestSignSubcommandAndSigningKeyFlag(t *testing.T) {
+	var out, errb bytes.Buffer
+	// Generate a key, then sign URLs with it.
+	if c := run(context.Background(), []string{"sign", "--new-key"}, &out, &errb, nil); c != exitOK || len(strings.TrimSpace(out.String())) != 64 {
+		t.Fatalf("new-key: %d %q", c, out.String())
+	}
+	key := strings.TrimSpace(out.String())
+	out.Reset()
+	if c := run(context.Background(), []string{"sign", "--key", key, "--ttl", "5m", "--sub", "dev1", "https://h/nq/small", "https://h/nq/large?bytes=1"}, &out, &errb, nil); c != exitOK {
+		t.Fatalf("sign: %d %s", c, errb.String())
+	}
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	if len(lines) != 2 || !strings.Contains(lines[0], "sig=") || !strings.Contains(lines[1], "bytes=1") || !strings.Contains(lines[1], "sub=dev1") {
+		t.Errorf("signed urls: %v", lines)
+	}
+	for _, args := range [][]string{
+		{"sign"}, // no URLs
+		{"sign", "--key", "short", "https://h/p"},             // bad key
+		{"sign", "--key", key, "--ttl", "48h", "https://h/p"}, // beyond max TTL
+		{"sign", "--key", key, "https://h"},                   // no path
+	} {
+		if c := run(context.Background(), args, &out, &errb, nil); c != exitUsage {
+			t.Errorf("%v: exit %d", args, c)
+		}
+	}
+
+	// A server with only a signing key accepts signed URLs and refuses others.
+	dir := t.TempDir()
+	cert, keyFile := writeCert(t, dir)
+	addr := serve(t, "--cert", cert, "--key", keyFile, "--signing-key", key)
+	pool := x509.NewCertPool()
+	pool.AddCert(loadLeaf(t, cert))
+	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}}}
+	out.Reset()
+	if c := run(context.Background(), []string{"sign", "--key", key, "https://" + addr.String() + server.SmallPath}, &out, &errb, nil); c != exitOK {
+		t.Fatal(errb.String())
+	}
+	resp, err := client.Get(strings.TrimSpace(out.String()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("signed request: %s", resp.Status)
+	}
+	resp, err = client.Get("https://" + addr.String() + server.SmallPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("unsigned request: %s", resp.Status)
+	}
+	// Env var form and a bad key at startup.
+	t.Setenv("NQSERVER_SIGNING_KEY", "nope")
+	if c := run(context.Background(), []string{"--self-signed", "--listen", "127.0.0.1:0"}, &out, &errb, nil); c != exitUsage {
+		t.Errorf("bad env signing key: exit %d", c)
+	}
+}

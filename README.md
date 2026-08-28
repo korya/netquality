@@ -138,8 +138,29 @@ whether a request may *start*, never slow one down:
 | `--max-connections` | 256 | extra connections wait in the accept queue |
 
 Behind a load balancer the client key is the balancer's address; the server
-deliberately does not trust `X-Forwarded-For`. Signed, expiring URLs (no
-secret on clients) are planned as an alternative to the token.
+deliberately does not trust `X-Forwarded-For` — use signed URLs with a
+subject (below) to key budgets per device instead.
+
+**Signed URLs — no secret on clients.** Your backend serves the config
+document with test URLs it has signed; `nqserver` verifies them and the
+laptop never holds a reusable credential:
+
+```
+nqserver sign --new-key                       # once: a 32-byte key, keep it on the backend and the server
+NQSERVER_SIGNING_KEY=<key> nqserver --cert c.pem --key k.pem
+nqserver sign --key <key> --ttl 10m --sub laptop-7 https://nq.example.com/nq/small \
+    https://nq.example.com/nq/large https://nq.example.com/nq/upload
+```
+
+Put the three signed URLs in a config document served by your backend and
+point the client at it (`Target{ConfigURL: "https://backend/nq-config"}`).
+The client needs no flags. The signature covers only the path, `exp` and
+`sub` — `sig = base64url(HMAC-SHA256(key, path + "\n" + exp + "\n" + sub))` —
+so any language can issue it, parameter order is irrelevant, and unsigned
+parameters are deliberately unprotected (never let a server trust them).
+Validity is `exp` + 30 s leeway, at most 24 h; `sub` keys the per-client
+budget, so ten laptops behind one NAT get ten budgets. Repeat
+`--signing-key` to rotate. Go backends can call `server.SignURL`.
 
 **mTLS** works today without a flag: wrap `server.Handler` in your own
 `http.Server` with `TLSConfig.ClientAuth = tls.RequireAndVerifyClientCert`

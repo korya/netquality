@@ -48,9 +48,13 @@ type Options struct {
 	LargeSize int64
 	// TestEndpoint, if set, is advertised as the config's test_endpoint.
 	TestEndpoint string
-	// AuthToken, if set, is required as "Authorization: Bearer <token>" on
-	// every endpoint, the config document included. Empty = anonymous.
+	// AuthToken, if set, is accepted as "Authorization: Bearer <token>" on
+	// every endpoint, the config document included.
 	AuthToken string
+	// SigningKeys, if set, make the three test endpoints accept URLs signed
+	// with any of the keys (see SignURL). The config document is not covered.
+	// With neither AuthToken nor SigningKeys the server is anonymous.
+	SigningKeys [][]byte
 	// UploadSize caps the bytes accepted by one upload request (default 16 GiB).
 	UploadSize int64
 	// MaxClientBytes and ClientWindow form a per-client budget keyed by source
@@ -183,16 +187,30 @@ func Handler(o Options) http.Handler {
 	mux := http.NewServeMux()
 	// guard wraps a route with authorization and, for metered routes, the
 	// per-client budget: checked before any body is written, charged with the
-	// bytes actually moved when the handler returns.
+	// bytes actually moved when the handler returns. A verified signed
+	// subject keys the budget instead of the source IP.
 	type metered func(w http.ResponseWriter, r *http.Request) (moved int64)
-	guard := func(meter bool, h metered) http.HandlerFunc {
+	authed := o.AuthToken != "" || len(o.SigningKeys) > 0
+	guard := func(meter bool, signed bool, h metered) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
-			if !authorize(r, o.AuthToken) {
-				unauthorized(w)
-				return
+			key := clientIP(r)
+			if authed {
+				ok := o.AuthToken != "" && authorize(r, o.AuthToken)
+				if !ok && signed {
+					if sub, sok := verifySignature(r, o.SigningKeys, time.Now()); sok {
+						ok = true
+						if sub != "" {
+							key = "sub:" + sub
+						}
+					}
+				}
+				if !ok {
+					unauthorized(w)
+					return
+				}
 			}
 			if budget != nil && meter {
-				ip := clientIP(r)
+				ip := key
 				if ok, wait := budget.allow(ip); !ok {
 					w.Header().Set("Retry-After", strconv.Itoa(int(wait/time.Second)+1))
 					http.Error(w, "client byte budget exhausted", http.StatusTooManyRequests)
@@ -204,7 +222,7 @@ func Handler(o Options) http.Handler {
 			h(w, r)
 		}
 	}
-	mux.HandleFunc(ConfigPath, guard(false, func(w http.ResponseWriter, r *http.Request) int64 {
+	mux.HandleFunc(ConfigPath, guard(false, false, func(w http.ResponseWriter, r *http.Request) int64 {
 		base := o.BaseURL
 		if base == "" {
 			base = "https://" + r.Host
@@ -225,7 +243,7 @@ func Handler(o Options) http.Handler {
 		_ = json.NewEncoder(w).Encode(doc)
 		return 0
 	}))
-	mux.HandleFunc(SmallPath, guard(false, func(w http.ResponseWriter, r *http.Request) int64 {
+	mux.HandleFunc(SmallPath, guard(false, true, func(w http.ResponseWriter, r *http.Request) int64 {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return 0
@@ -236,7 +254,7 @@ func Handler(o Options) http.Handler {
 		_, _ = w.Write([]byte{'x'})
 		return 0
 	}))
-	mux.HandleFunc(LargePath, guard(true, func(w http.ResponseWriter, r *http.Request) (moved int64) {
+	mux.HandleFunc(LargePath, guard(true, true, func(w http.ResponseWriter, r *http.Request) (moved int64) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return 0
@@ -261,7 +279,7 @@ func Handler(o Options) http.Handler {
 		}
 		return moved
 	}))
-	mux.HandleFunc(UploadPath, guard(true, func(w http.ResponseWriter, r *http.Request) int64 {
+	mux.HandleFunc(UploadPath, guard(true, true, func(w http.ResponseWriter, r *http.Request) int64 {
 		if r.Method != http.MethodPost && r.Method != http.MethodPut {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return 0

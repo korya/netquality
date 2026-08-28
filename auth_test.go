@@ -2,6 +2,7 @@ package netquality
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"log"
@@ -162,5 +163,76 @@ func TestConnectionCapDoesNotBreakRun(t *testing.T) {
 	}
 	if res.Download.Flows > 8 {
 		t.Logf("note: %d flows opened against a cap of 8 (waiting connections are counted client-side)", res.Download.Flows)
+	}
+}
+
+// signedBackend serves a config document whose test URLs point at nq (an
+// nqserver) and are signed with key for the given subject and expiry — the
+// role a product backend plays in the signed-URL flow.
+func signedBackend(t *testing.T, nqURL string, key []byte, exp time.Time, sub string) *httptest.Server {
+	t.Helper()
+	sign := func(path string) string {
+		s, err := server.SignURL(key, nqURL+path, exp, sub)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+	doc := map[string]any{"version": 1, "urls": map[string]string{
+		"small_download_url": sign(server.SmallPath),
+		"large_download_url": sign(server.LargePath),
+		"upload_url":         sign(server.UploadPath),
+	}}
+	body, _ := json.Marshal(doc)
+	b := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(body)
+	}))
+	t.Cleanup(b.Close)
+	return b
+}
+
+var signKey = []byte("an-example-signing-key-of-32-byte")
+
+func TestSignedURLsEndToEnd(t *testing.T) {
+	nq := startServer(t, server.Options{SigningKeys: [][]byte{signKey}}, nil, nil, true)
+	backend := signedBackend(t, nq.URL, signKey, time.Now().Add(5*time.Minute), "laptop-7")
+	o := tokenOpts("") // no credential on the client at all
+	o.Directions = Both
+	res, err := Run(context.Background(), Target{ConfigURL: backend.URL + "/config"}, o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range []*DirectionResult{res.Download, res.Upload} {
+		if d == nil || d.Bytes == 0 || d.FlowErrors != 0 || d.Loaded.Self == nil || d.Loaded.Foreign == nil {
+			t.Errorf("signed run incomplete: %+v", d)
+		}
+	}
+	if res.Idle == nil || res.Idle.Samples != 2 {
+		t.Errorf("idle probes over signed small URL: %+v", res.Idle)
+	}
+	if !strings.Contains(res.Target.Config.LargeDownloadURL, "sig=") || res.Target.Host != strings.TrimPrefix(nq.URL, "https://") {
+		t.Errorf("target = %+v", res.Target)
+	}
+}
+
+func TestSignedURLsRejected(t *testing.T) {
+	nq := startServer(t, server.Options{SigningKeys: [][]byte{signKey}}, nil, nil, true)
+	cases := map[string]*httptest.Server{
+		"expired":   signedBackend(t, nq.URL, signKey, time.Now().Add(-time.Hour), "d"),
+		"wrong key": signedBackend(t, nq.URL, []byte("a-different-key-of-32-bytes-long"), time.Now().Add(time.Minute), "d"),
+	}
+	for name, backend := range cases {
+		t.Run(name, func(t *testing.T) {
+			o := tokenOpts("")
+			o.IdleProbes = 2
+			res, err := Run(context.Background(), Target{ConfigURL: backend.URL + "/config"}, o)
+			// Discovery succeeds (the backend is open); every test request is
+			// refused. Idle probes all fail (warning), the first flow fails
+			// before any interval, so Run returns the 401 error.
+			if err == nil || !strings.Contains(err.Error(), "401") {
+				t.Errorf("err = %v (res=%v)", err, res)
+			}
+		})
 	}
 }

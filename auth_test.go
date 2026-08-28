@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -53,7 +54,8 @@ func TestHeadersReachEveryRoute(t *testing.T) {
 }
 
 func TestTokenProtectedServer(t *testing.T) {
-	srv := startServer(t, server.Options{AuthToken: "s3cret"}, nil, nil, true)
+	var loadBytes atomic.Int64
+	srv := startServer(t, server.Options{AuthToken: "s3cret"}, func(h http.Handler) http.Handler { return countLarge(h, &loadBytes) }, nil, true)
 	target := Target{ConfigURL: srv.URL + server.ConfigPath}
 
 	res, err := Run(context.Background(), target, tokenOpts("s3cret"))
@@ -78,21 +80,20 @@ func TestTokenProtectedServer(t *testing.T) {
 		"empty":    func() Options { o := tokenOpts(""); o.Header = http.Header{"Authorization": {"Bearer "}}; return o }(),
 	} {
 		t.Run(name, func(t *testing.T) {
-			var bytes int64
-			srv.Config.Handler = countLarge(srv.Config.Handler, &bytes)
+			before := loadBytes.Load()
 			res, err := Run(context.Background(), target, o)
 			if err == nil || !strings.Contains(err.Error(), "401") || res != nil {
 				t.Errorf("err=%v res=%v", err, res)
 			}
-			if bytes != 0 {
-				t.Errorf("load traffic sent despite 401: %d bytes", bytes)
+			if moved := loadBytes.Load() - before; moved != 0 {
+				t.Errorf("load traffic sent despite 401: %d bytes", moved)
 			}
 		})
 	}
 }
 
 // countLarge wraps h to count bytes written by the large endpoint.
-func countLarge(h http.Handler, n *int64) http.Handler {
+func countLarge(h http.Handler, n *atomic.Int64) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == server.LargePath {
 			w = &countingResponseWriter{ResponseWriter: w, n: n}
@@ -103,11 +104,11 @@ func countLarge(h http.Handler, n *int64) http.Handler {
 
 type countingResponseWriter struct {
 	http.ResponseWriter
-	n *int64
+	n *atomic.Int64
 }
 
 func (c *countingResponseWriter) Write(b []byte) (int, error) {
-	*c.n += int64(len(b))
+	c.n.Add(int64(len(b)))
 	return c.ResponseWriter.Write(b)
 }
 

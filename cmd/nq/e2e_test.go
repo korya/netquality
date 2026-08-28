@@ -172,3 +172,40 @@ func TestAuthTokenFlagAndEnv(t *testing.T) {
 		t.Errorf("env token: exit %d %s", c, errb.String())
 	}
 }
+
+func TestEdgeFlags(t *testing.T) {
+	url := startServer(t)
+	var out, errb bytes.Buffer
+	// Zero duration means the library default (12s), too long for a test; a
+	// tiny duration plus an interval longer than it must still terminate and
+	// report duration_cap with zero intervals.
+	if c := run([]string{"--config-url", url, "--insecure", "--download-only", "--json", "--max-duration", "150ms", "--interval", "1s", "--idle-probes", "-1"}, &out, &errb); c != exitOK {
+		t.Fatalf("short duration: exit %d %s", c, errb.String())
+	}
+	var res netquality.Result
+	if err := json.Unmarshal(out.Bytes(), &res); err != nil {
+		t.Fatal(err)
+	}
+	if res.Idle != nil || res.Download == nil || res.Download.Intervals != 0 || res.Download.Reason != netquality.ReasonDurationCap || res.Download.ThroughputBPS == 0 {
+		t.Errorf("edge run: idle=%v download=%+v", res.Idle, res.Download)
+	}
+	// Invalid sizes and durations are usage errors, not runs.
+	for _, args := range [][]string{
+		{"--config-url", url, "--max-bytes", "-5MB"},
+		{"--config-url", url, "--max-duration", "soon"},
+		{"--config-url", url, "--max-flows", "many"},
+	} {
+		if c := run(args, &out, &errb); c != exitUsage {
+			t.Errorf("%v: exit %d", args, c)
+		}
+	}
+	// --max-flows 0 and --idle-probes 0 fall back to defaults rather than
+	// running with nothing.
+	out.Reset()
+	if c := run(base(url, "--download-only", "--json", "--max-flows", "0", "--idle-probes", "0"), &out, &errb); c != exitOK {
+		t.Fatalf("zero flags: exit %d %s", c, errb.String())
+	}
+	if err := json.Unmarshal(out.Bytes(), &res); err != nil || res.Idle == nil || res.Idle.Samples != netquality.DefaultIdleProbes || res.Download.Flows == 0 {
+		t.Errorf("zero flags must mean defaults: %v idle=%+v flows=%d", err, res.Idle, res.Download.Flows)
+	}
+}

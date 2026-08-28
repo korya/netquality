@@ -47,6 +47,13 @@ directory relative to the repo root; `.` is the library.
 | HTTP/1.1 fallback | No self probes, RPM from foreign probes, warning | . | TestHTTP11Fallback |
 | Flow error | Failure before any interval aborts the run | . | TestFlowErrorAbortsPhase |
 | Flow error | Failure after intervals truncates with `flow_error`, keeps data | . | TestFlowErrorAfterIntervalsKeepsResult |
+| Flow error | Upload rejected mid-stream (413): download intact, upload flagged, error carries the status, no stall | . | TestUploadRejectedMidStream |
+| Flow error | Redirect on a test URL fails the flow with its status | . | TestRedirectOnTestURLIsAFlowError |
+| Stalled server | Headers without body: ends at MaxDuration with duration_cap and honest ~0 throughput | . | TestStalledLargeBody |
+| Dead host | Unresolvable test host fails fast with the host in the error | . | TestUnresolvableTestHostFailsFast |
+| HTTP/1.1 fallback | Upload direction: no self probes, foreign RPM, warning | . | TestHTTP11FallbackUpload |
+| Full ramp | Reaches exactly MaxFlows (16) and never exceeds it | . | TestFullRampToMaxFlows |
+| IPv6 | Loopback over `[::1]`: resolved/local IPs, host, full phase (skipped without IPv6) | . | TestIPv6Loopback |
 | RPM | Draft formula incl. TCP-only case | internal/engine | TestResponsiveness |
 | RPM | `60000 / RTT` | internal/engine | TestRPM |
 | Events | Phase/interval/probe/flow/warning events with consistent counts | . | TestEventStream |
@@ -63,6 +70,7 @@ directory relative to the repo root; `.` is the library.
 | MaxDuration | Truncated with `duration_cap` when never stable | . | TestDurationCap |
 | MaxFlows | Never exceeded | . | TestMaxFlowsWithFakeClock |
 | Cancellation | Stops within ~250 ms, partial result flagged `cancelled` | . | TestCancellation |
+| Cancellation | Upload phase: body stops on ctx within ~250 ms, partial result | . | TestUploadCancellation |
 | Options | Defaults applied; negative IdleProbes preserved | . | TestMaxFlowsDefaultAndOptionsDefaults |
 
 ## Proxies
@@ -81,6 +89,7 @@ directory relative to the repo root; `.` is the library.
 | Feature | Scenario | Package | Test |
 |---|---|---|---|
 | JSON | snake_case keys, absent directions and empty address lists omitted | . | TestResultJSONShape |
+| JSON | Marshal/unmarshal round-trip preserves a real Result | . | TestResultJSONRoundTrip |
 | Local addresses | Loopback run reports `local_ips` = 127.0.0.1 | . | TestRunLoopback |
 | Local addresses | Recorded under an explicit proxy (interface toward the proxy) | . | TestExplicitProxyDetected |
 | Local addresses | Empty with a custom RoundTripper | . | TestCustomRoundTripperWarns |
@@ -124,10 +133,12 @@ directory relative to the repo root; `.` is the library.
 | Limits (client) | Budget exhausted mid-run ends with a flagged flow_error, not a hang | . | TestBudgetExhaustedMidRunIsGraceful |
 | Limits (client) | Run completes under a server connection cap | . | TestConnectionCapDoesNotBreakRun |
 | `--auth-token` | Flag and `NQ_AUTH_TOKEN`; 401 exits 1 | cmd/nq | TestAuthTokenFlagAndEnv |
+| Edge flags | Duration shorter than interval; invalid sizes/durations are usage errors; zero flows/probes mean defaults | cmd/nq | TestEdgeFlags |
 | Signed URLs | Fixed test vector; empty key, no path, oversized subject rejected | server | TestSignURLVector |
-| Signed URLs | Verify table: order, extra params, rotation, leeway, expiry, max TTL, wrong key, tampered path/sub/exp, malformed | server | TestVerifySignature |
+| Signed URLs | Verify table: order, extra params, rotation, leeway, expiry, max TTL, wrong key, tampered path/sub/exp, malformed, padded/standard base64, percent-encoded path, duplicate params, exp zero/negative/overflow/now, reserved characters in `sub` | server | TestVerifySignature |
+| Signed URLs | Anonymous server ignores signatures | server | TestHandlerAnonymousServerAcceptsSignedURLs |
 | Signed URLs | Key parsing: hex, base64url, file (hex or raw), too short, missing file | server | TestParseSigningKey |
-| Signed URLs | Token or signature suffices; config never on signature; budget keyed by subject; expired 401 | server | TestHandlerSignedURLs |
+| Signed URLs | Token or signature suffices; invalid token does not veto a valid signature; config never on signature; budget keyed by subject; expired 401 | server | TestHandlerSignedURLs |
 | Signed URLs | Signed-only server: config unreachable, signed small OK | server | TestHandlerSignedOnlyServer |
 | Signed URLs (client) | Backend-served signed config runs both directions with no client credential | . | TestSignedURLsEndToEnd |
 | Signed URLs (client) | Expired or wrong-key URLs fail with 401 | . | TestSignedURLsRejected |

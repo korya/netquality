@@ -73,6 +73,21 @@ func TestVerifySignature(t *testing.T) {
 		{"non-numeric exp", req(u.Path, "exp=soon&sig="+q.Get("sig")), [][]byte{testKey}, now, "", false},
 		{"oversized sub", req(u.Path, "exp="+q.Get("exp")+"&sig="+q.Get("sig")+"&sub="+strings.Repeat("s", 300)), [][]byte{testKey}, now, "", false},
 		{"no params", req(u.Path, ""), [][]byte{testKey}, now, "", false},
+		// Encodings and canonicalisation.
+		{"padded base64url sig", req(u.Path, "exp="+q.Get("exp")+"&sub=dev&sig="+base64.URLEncoding.EncodeToString(signature(testKey, u.Path, 1800003600, "dev"))), [][]byte{testKey}, now, "dev", true},
+		{"standard base64 sig", req(u.Path, "exp="+q.Get("exp")+"&sub=dev&sig="+url.QueryEscape(base64.StdEncoding.EncodeToString(signature(testKey, u.Path, 1800003600, "dev")))), [][]byte{testKey}, now, "dev", true},
+		{"percent-encoded path verifies against decoded path", req("/nq/%6Carge", u.RawQuery), [][]byte{testKey}, now, "dev", true},
+		{"duplicate exp: first wins", req(u.Path, u.RawQuery+"&exp=1900000000"), [][]byte{testKey}, now, "dev", true},
+		{"duplicate sig: first wins", req(u.Path, u.RawQuery+"&sig=AAAA"), [][]byte{testKey}, now, "dev", true},
+		{"duplicate sig: forged first", req(u.Path, "sig=AAAA&"+u.RawQuery), [][]byte{testKey}, now, "", false},
+		{"exp exactly now", req(u.Path, func() string {
+			s, _ := SignURL(testKey, "https://x"+u.Path, now, "dev")
+			p, _ := url.Parse(s)
+			return p.RawQuery
+		}()), [][]byte{testKey}, now, "dev", true},
+		{"exp zero", req(u.Path, "exp=0&sub=dev&sig="+base64.RawURLEncoding.EncodeToString(signature(testKey, u.Path, 0, "dev"))), [][]byte{testKey}, now, "", false},
+		{"exp negative", req(u.Path, "exp=-5&sub=dev&sig="+base64.RawURLEncoding.EncodeToString(signature(testKey, u.Path, -5, "dev"))), [][]byte{testKey}, now, "", false},
+		{"exp overflow", req(u.Path, "exp=99999999999999999999&sig="+q.Get("sig")), [][]byte{testKey}, now, "", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -81,6 +96,23 @@ func TestVerifySignature(t *testing.T) {
 				t.Errorf("got (%q,%v) want (%q,%v)", sub, ok, tc.wantSub, tc.ok)
 			}
 		})
+	}
+	// Subjects with reserved characters round-trip when percent-encoded by
+	// SignURL; a raw "+" from a careless issuer decodes to a space and fails
+	// closed.
+	for _, sub := range []string{"a+b", "a b", "x&y=z", "ünïcødé", "dev/7#1"} {
+		s, err := SignURL(testKey, "https://x"+u.Path, exp, sub)
+		if err != nil {
+			t.Fatal(err)
+		}
+		p, _ := url.Parse(s)
+		if got, ok := verifySignature(req(p.Path, p.RawQuery), [][]byte{testKey}, now); !ok || got != sub {
+			t.Errorf("sub %q: (%q,%v)", sub, got, ok)
+		}
+	}
+	rawPlus := "exp=" + q.Get("exp") + "&sub=a+b&sig=" + base64.RawURLEncoding.EncodeToString(signature(testKey, u.Path, 1800003600, "a+b"))
+	if _, ok := verifySignature(req(u.Path, rawPlus), [][]byte{testKey}, now); ok {
+		t.Error("unencoded '+' in sub must fail closed (decodes to a space)")
 	}
 	// A URL signed without a subject verifies with an empty subject.
 	nosub, _ := SignURL(testKey, "https://nq.example/nq/small", exp, "")
@@ -167,6 +199,10 @@ func TestHandlerSignedURLs(t *testing.T) {
 	if r := get(signed(LargePath, "b"), ""); r.StatusCode != http.StatusOK {
 		t.Errorf("b has its own budget: %s", r.Status)
 	}
+	// An invalid token does not veto a valid signature.
+	if r := get(signed(SmallPath, ""), "wrong-token"); r.StatusCode != http.StatusOK {
+		t.Errorf("invalid token + valid signature: %s", r.Status)
+	}
 	// Expired signature is plain 401.
 	old, _ := SignURL(testKey, srv.URL+SmallPath, time.Now().Add(-time.Hour), "")
 	if r := get(old, ""); r.StatusCode != http.StatusUnauthorized {
@@ -208,5 +244,19 @@ func readAll(resp *http.Response) ([]byte, error) {
 		if err != nil {
 			return []byte(buf.String()), nil
 		}
+	}
+}
+
+func TestHandlerAnonymousServerAcceptsSignedURLs(t *testing.T) {
+	srv := httptest.NewTLSServer(Handler(Options{MaxClientBytes: -1}))
+	defer srv.Close()
+	s, _ := SignURL(testKey, srv.URL+SmallPath, time.Now().Add(time.Minute), "d")
+	resp, err := srv.Client().Get(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = readAll(resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("anonymous server must ignore signatures: %s", resp.Status)
 	}
 }

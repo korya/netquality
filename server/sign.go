@@ -23,6 +23,12 @@ import (
 // Only path, exp and sub are signed, so parameter order and other query
 // parameters (a Cloudflare-style ?bytes=) do not matter — and are not
 // protected: a server must never derive authorisation or limits from them.
+// The path is the decoded request path (sign "/nq/large", not "/nq/%6Carge");
+// sub is compared after query decoding, so issuers must percent-encode it
+// ("+" in a raw query decodes to a space). sig may be raw or padded, URL-safe
+// or standard base64. Issuer and server clocks must agree to within the
+// leeway: a server clock behind the issuer by more than MaxSignatureTTL
+// refuses every URL as issued too far in the future.
 // The config document's own URL is never signed (the well-known URI admits
 // no query string); serve it from the backend or protect it with a token.
 const (
@@ -91,8 +97,8 @@ func verifySignature(r *http.Request, keys [][]byte, now time.Time) (string, boo
 	if len(sub) > maxSubjectLen {
 		return "", false
 	}
-	sig, err := base64.RawURLEncoding.DecodeString(sigStr)
-	if err != nil || len(sig) != sha256.Size {
+	sig, ok := decodeSig(sigStr)
+	if !ok {
 		return "", false
 	}
 	for _, key := range keys {
@@ -101,6 +107,16 @@ func verifySignature(r *http.Request, keys [][]byte, now time.Time) (string, boo
 		}
 	}
 	return "", false
+}
+
+// decodeSig accepts raw or padded, URL-safe or standard base64.
+func decodeSig(s string) ([]byte, bool) {
+	for _, enc := range []*base64.Encoding{base64.RawURLEncoding, base64.URLEncoding, base64.RawStdEncoding, base64.StdEncoding} {
+		if b, err := enc.DecodeString(s); err == nil && len(b) == sha256.Size {
+			return b, true
+		}
+	}
+	return nil, false
 }
 
 // ParseSigningKey decodes a key given as hex, base64url, or "file:<path>"

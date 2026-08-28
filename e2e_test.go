@@ -80,8 +80,11 @@ func TestFlowErrorAbortsPhase(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "503") {
 		t.Fatalf("want flow error mentioning 503, got %v", err)
 	}
-	if res != nil {
-		t.Errorf("failed phase before any interval must return nil result, got %+v", res)
+	if res == nil || res.Download == nil || res.Download.Reason != ReasonFlowError || !res.Download.Truncated {
+		t.Errorf("failed phase must still return a flagged partial result, got %+v", res)
+	}
+	if res.Upload != nil {
+		t.Error("later phases do not run after a failed one")
 	}
 }
 

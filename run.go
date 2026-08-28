@@ -17,8 +17,10 @@ import (
 // Run executes the responsiveness test against t and returns the Result.
 //
 // If ctx is cancelled mid-run, Run returns the partial Result (Cancelled=true)
-// together with ctx.Err(). Other errors (discovery failure, no usable flows)
-// return a nil Result.
+// together with ctx.Err(). If a load phase fails before completing an
+// interval, Run returns the partial Result (that direction flagged
+// reason=flow_error, everything measured before it intact) together with the
+// error. Only discovery failures return a nil Result.
 func Run(ctx context.Context, t Target, o Options) (*Result, error) {
 	return RunWithEvents(ctx, t, o, nil)
 }
@@ -155,8 +157,10 @@ func (r *runner) run(ctx context.Context, t Target) (*Result, error) {
 			return r.res, ctx.Err()
 		}
 		if err != nil {
+			// Keep what was measured (the other direction, idle latency) and
+			// hand it back with the error; the failed direction is flagged.
 			finish()
-			return nil, err
+			return r.res, err
 		}
 	}
 	r.emit(Event{Kind: EventPhase, Phase: "done"})

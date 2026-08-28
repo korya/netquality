@@ -6,7 +6,8 @@ Conditions* test ([draft-ietf-ippm-responsiveness-09][draft]) against Apple's,
 Cloudflare's, or your own server.
 
 - Standard library only, no CGO, cross-compiles for Windows/macOS/Linux on
-  amd64 and arm64.
+  amd64 and arm64. Requires Go 1.26+ (older lines no longer receive TLS/HTTP
+  security fixes).
 - Every run is bounded by **time, bytes and connection count** before it
   starts, and every number in the result says how it was obtained.
 - Sends nothing over the network except the test itself.

@@ -5,6 +5,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-28
+
+### Changed
+- Minimum Go version is 1.26. Go 1.24 is out of support and its `crypto/tls`,
+  `net/http` and `encoding/asn1` carry unfixed vulnerabilities
+  (GO-2026-6090, GO-2026-6089, GO-2026-5972, GO-2026-5856); binaries from
+  v0.1.x were built with it. CI and release builds pin the toolchain
+  (`GOTOOLCHAIN=local`) and run `govulncheck`.
+
 ### Added
 - Proxy detection: `target.proxy` reports explicit proxies (from the
   transport's proxy function) and TLS interception (verified chain without
@@ -52,6 +61,7 @@ All notable changes to this project are documented here. The format follows
 - Unit, loopback integration and opt-in live (`NQ_LIVE=1`) tests; CI on
   Linux/macOS/Windows plus a six-target cross-compile matrix.
 
-[Unreleased]: https://github.com/korya/netquality/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/korya/netquality/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/korya/netquality/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/korya/netquality/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/korya/netquality/releases/tag/v0.1.0

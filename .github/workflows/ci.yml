@@ -5,18 +5,20 @@ on:
   pull_request:
 permissions:
   contents: read
+env:
+  GOTOOLCHAIN: local # never let a go.mod or a tool silently switch toolchains
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-        with: { go-version-file: go.mod }
+        with: { go-version: '1.27.0' }
       - run: go vet ./...
       - uses: golangci/golangci-lint-action@v7
         with: { version: latest }
       - name: govulncheck
-        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
   test:
     strategy:
       fail-fast: false
@@ -26,12 +28,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-        with: { go-version-file: go.mod }
+        with: { go-version: '1.27.0' }
       - run: go test -race -count=1 -coverprofile=coverage.out ./...
         shell: bash # PowerShell splits "-coverprofile=coverage.out" and passes ".out" as a package
       - name: Coverage summary
         if: runner.os == 'Linux'
         run: go tool cover -func=coverage.out | tail -1 | tee -a "$GITHUB_STEP_SUMMARY"
+  minimum-go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: '1.26.7' } # must match the `go` directive's minor in go.mod
+      - run: go test -count=1 ./...
   cross-compile:
     runs-on: ubuntu-latest
     strategy:
@@ -46,6 +55,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-        with: { go-version-file: go.mod }
+        with: { go-version: '1.27.0' }
       - run: go build ./...
         env: { GOOS: "${{ matrix.goos }}", GOARCH: "${{ matrix.goarch }}", CGO_ENABLED: "0" }

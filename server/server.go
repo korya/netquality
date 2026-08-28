@@ -31,9 +31,9 @@ const (
 	defaultLarge  = 8 << 30 // 8 GiB, the spec's minimum
 	streamChunk   = 64 << 10
 	defaultUpload = 16 << 30
-	// DefaultMaxClientBytes / DefaultClientWindow: four default nq runs per
-	// client per window before requests are refused with 429.
-	DefaultMaxClientBytes = 2 << 30
+	// DefaultMaxClientBytes / DefaultClientWindow: roughly four gigabit-class
+	// nq runs per client per window before requests are refused with 429.
+	DefaultMaxClientBytes = 8 << 30
 	DefaultClientWindow   = 10 * time.Minute
 	// maxTokenLength bounds the credential we are willing to compare.
 	maxTokenLength = 1024

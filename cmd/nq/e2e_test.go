@@ -16,7 +16,7 @@ import (
 
 func startServer(t *testing.T) string {
 	t.Helper()
-	srv := httptest.NewUnstartedServer(server.Handler(server.Options{}))
+	srv := httptest.NewUnstartedServer(server.Handler(server.Options{MaxClientBytes: -1}))
 	srv.EnableHTTP2 = true
 	srv.StartTLS()
 	t.Cleanup(srv.Close)
@@ -145,7 +145,7 @@ func TestHelpers(t *testing.T) {
 }
 
 func TestAuthTokenFlagAndEnv(t *testing.T) {
-	srv := httptest.NewUnstartedServer(server.Handler(server.Options{AuthToken: "s3cret"}))
+	srv := httptest.NewUnstartedServer(server.Handler(server.Options{AuthToken: "s3cret", MaxClientBytes: -1}))
 	srv.EnableHTTP2 = true
 	srv.StartTLS()
 	t.Cleanup(srv.Close)

@@ -139,7 +139,7 @@ func TestConnectionCapDoesNotBreakRun(t *testing.T) {
 	// A cap of 8 with a client that wants up to 16 flows plus probes: the
 	// run completes (fewer flows), never errors. The listener must be wrapped
 	// before the server starts accepting.
-	srv := httptest.NewUnstartedServer(server.Handler(server.Options{}))
+	srv := httptest.NewUnstartedServer(server.Handler(server.Options{MaxClientBytes: -1}))
 	srv.Listener = server.LimitListener(srv.Listener, 8)
 	srv.EnableHTTP2 = true
 	srv.Config.ErrorLog = log.New(io.Discard, "", 0)

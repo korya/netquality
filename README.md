@@ -132,7 +132,7 @@ whether a request may *start*, never slow one down:
 
 | Flag | Default | Effect |
 |---|---|---|
-| `--client-bytes` / `--client-window` | 2 GiB / 10 min | per client IP; a refused request gets `429` + `Retry-After` |
+| `--client-bytes` / `--client-window` | 8 GiB / 10 min (unlimited with `--self-signed`) | per client IP; a refused request gets `429` + `Retry-After` |
 | `--upload-size` | 16 GiB | bytes accepted by one upload |
 | `--large-size` | 8 GiB | bytes served by one download |
 | `--max-connections` | 256 | extra connections wait in the accept queue |

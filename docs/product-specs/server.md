@@ -40,7 +40,8 @@ refuses anonymous mode with a real certificate unless `--allow-anonymous`
 
 ### SRV-8: Per-client byte budget
 Each client IP has a budget of `--client-bytes` per `--client-window`
-(default 2 GiB per 10 min). A large download or upload may start only while
+(default 8 GiB per 10 min; unlimited by default under `--self-signed`, since
+development runs on loopback move gigabytes). A large download or upload may start only while
 the budget is positive and is charged the bytes it actually moved when it
 ends, so one request may overshoot by at most its own cap; a refused request
 gets `429` with `Retry-After` in seconds. Running requests are never slowed

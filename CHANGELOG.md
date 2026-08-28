@@ -8,8 +8,9 @@ All notable changes to this project are documented here. The format follows
 ### Added
 - `nqserver` bearer-token authentication (`--auth-token` / `NQSERVER_AUTH_TOKEN`)
   on every endpoint, and load limits that gate requests without shaping
-  traffic: per-client byte budget (`--client-bytes`/`--client-window`, 429 +
-  `Retry-After`), `--upload-size`, `--max-connections` (#1).
+  traffic: per-client byte budget (`--client-bytes`/`--client-window`, default 8 GiB
+  per 10 min, unlimited under `--self-signed`; 429 + `Retry-After`),
+  `--upload-size`, `--max-connections` (#1).
 - `Options.Header` applied to every request; `nq --auth-token` /
   `NQ_AUTH_TOKEN`.
 - Internal: `internal/linksim`, a fluid link model, and an algorithm

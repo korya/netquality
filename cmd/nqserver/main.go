@@ -47,7 +47,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, onListen 
 		anonymous  = fs.Bool("allow-anonymous", false, "serve without a token (implied by --self-signed)")
 		uploadSize = fs.Int64("upload-size", 16<<30, "maximum bytes accepted by one upload request")
 		maxConns   = fs.Int("max-connections", 256, "maximum simultaneous connections (0 = unlimited)")
-		clientMax  = fs.Int64("client-bytes", server.DefaultMaxClientBytes, "bytes one client IP may move per --client-window before 429 (-1 = unlimited)")
+		clientMax  = fs.Int64("client-bytes", 0, "bytes one client IP may move per --client-window before 429 (-1 = unlimited; default 8 GiB, unlimited with --self-signed)")
 		clientWin  = fs.Duration("client-window", server.DefaultClientWindow, "window for --client-bytes")
 		version    = fs.Bool("version", false, "print version and exit")
 	)
@@ -79,6 +79,12 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, onListen 
 	if *authToken == "" && !*anonymous && !*selfSigned {
 		fmt.Fprintln(stderr, "nqserver: refusing to serve anonymously with a real certificate; pass --auth-token (or NQSERVER_AUTH_TOKEN), or --allow-anonymous")
 		return exitUsage
+	}
+	if *clientMax == 0 {
+		*clientMax = server.DefaultMaxClientBytes
+		if *selfSigned {
+			*clientMax = -1 // dev mode on loopback moves gigabytes per run
+		}
 	}
 	if *maxConns > 0 && *maxConns < 64 {
 		fmt.Fprintf(stderr, "nqserver: warning: --max-connections %d is below a single client's flows plus probes; tests may stall\n", *maxConns)

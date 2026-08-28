@@ -39,7 +39,8 @@ refuses anonymous mode with a real certificate unless `--allow-anonymous`
 (`--self-signed` implies it).
 
 ### SRV-8: Per-client byte budget
-Each client IP has a budget of `--client-bytes` per `--client-window`
+Each client — the verified signed subject when a request carries one (see
+SRV-10), otherwise the source IP — has a budget of `--client-bytes` per `--client-window`
 (default 8 GiB per 10 min; unlimited by default under `--self-signed`, since
 development runs on loopback move gigabytes). A large download or upload may start only while
 the budget is positive and is charged the bytes it actually moved when it
@@ -54,6 +55,18 @@ then answers normally; the large download is bounded by `--large-size`.
 `--max-connections` (default 256) caps simultaneous connections: further
 connections wait in the accept queue rather than fail, so a client bounded by
 its own `MaxDuration` still completes with fewer flows.
+
+### SRV-10: Signed URLs
+With one or more `--signing-key`s, the three test endpoints also accept a URL
+whose query carries `exp` (unix seconds), optional `sub` (≤ 256 bytes), and
+`sig = base64url(HMAC-SHA256(key, path + "\n" + exp + "\n" + sub))`, verified
+in constant time against every configured key (rotation). A signature is
+valid until `exp` plus 30 s of leeway and never for more than 24 h from
+issue; parameter order and unsigned parameters do not affect it, and the
+server never derives authorisation or limits from unsigned parameters. A
+bearer token and a signature are each sufficient. The config document is
+never accepted on a signature alone: a backend serves it. `nqserver sign`
+mints URLs and keys for testing.
 
 ### SRV-6: Lifecycle
 `--listen` defaults to `:8443`; the server logs its bound address, shuts down

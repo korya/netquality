@@ -124,6 +124,14 @@ directory relative to the repo root; `.` is the library.
 | Limits (client) | Budget exhausted mid-run ends with a flagged flow_error, not a hang | . | TestBudgetExhaustedMidRunIsGraceful |
 | Limits (client) | Run completes under a server connection cap | . | TestConnectionCapDoesNotBreakRun |
 | `--auth-token` | Flag and `NQ_AUTH_TOKEN`; 401 exits 1 | cmd/nq | TestAuthTokenFlagAndEnv |
+| Signed URLs | Fixed test vector; empty key, no path, oversized subject rejected | server | TestSignURLVector |
+| Signed URLs | Verify table: order, extra params, rotation, leeway, expiry, max TTL, wrong key, tampered path/sub/exp, malformed | server | TestVerifySignature |
+| Signed URLs | Key parsing: hex, base64url, file (hex or raw), too short, missing file | server | TestParseSigningKey |
+| Signed URLs | Token or signature suffices; config never on signature; budget keyed by subject; expired 401 | server | TestHandlerSignedURLs |
+| Signed URLs | Signed-only server: config unreachable, signed small OK | server | TestHandlerSignedOnlyServer |
+| Signed URLs (client) | Backend-served signed config runs both directions with no client credential | . | TestSignedURLsEndToEnd |
+| Signed URLs (client) | Expired or wrong-key URLs fail with 401 | . | TestSignedURLsRejected |
+| Binary | `sign --new-key`, `sign` output, usage errors; `--signing-key` server accepts signed, refuses unsigned; bad env key | cmd/nqserver | TestSignSubcommandAndSigningKeyFlag |
 | Build info | ldflags rendering | internal/buildinfo | TestBuildInfoString |
 
 ## Live (real networks; `NQ_LIVE=1`)

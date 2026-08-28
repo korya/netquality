@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `nqserver --signing-key`: the test endpoints accept HMAC-SHA256-signed,
+  expiring URLs (`exp`, optional `sub`, `sig`) minted by a backend, so
+  clients hold no credential; `sub` keys the per-client budget. `nqserver
+  sign` mints keys and URLs; `server.SignURL` for Go issuers (#1, plan B).
+
+### Added
 - `nqserver` bearer-token authentication (`--auth-token` / `NQSERVER_AUTH_TOKEN`)
   on every endpoint, and load limits that gate requests without shaping
   traffic: per-client byte budget (`--client-bytes`/`--client-window`, default 8 GiB

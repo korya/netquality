@@ -18,6 +18,9 @@ import (
 // and TLS tweaks, returning the base URL.
 func startServer(t *testing.T, o server.Options, wrap func(http.Handler) http.Handler, tlsCfg *tls.Config, h2 bool) *httptest.Server {
 	t.Helper()
+	if o.MaxClientBytes == 0 {
+		o.MaxClientBytes = -1 // loopback moves gigabytes per run
+	}
 	h := server.Handler(o)
 	if wrap != nil {
 		h = wrap(h)

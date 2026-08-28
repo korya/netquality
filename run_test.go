@@ -21,6 +21,9 @@ import (
 // its target and a client that trusts it.
 func newTestServer(t *testing.T, o server.Options) (Target, *http.Client) {
 	t.Helper()
+	if o.MaxClientBytes == 0 {
+		o.MaxClientBytes = -1 // loopback moves gigabytes per run
+	}
 	srv := httptest.NewUnstartedServer(server.Handler(o))
 	srv.EnableHTTP2 = true
 	srv.Config.ErrorLog = log.New(io.Discard, "", 0) // aborted probes log TLS handshake errors

@@ -38,6 +38,12 @@ When `test_endpoint` names a different host than the URLs, every test
 connection dials that host (keeping the URLs' port) while sending the URLs'
 host name for TLS and HTTP. `Result.Target.TestEndpoint` records it.
 
+### DISC-8: Caller headers on every request
+`Options.Header` is added to the config fetch, every probe, and every load
+request; keys set there override the defaults (for example `User-Agent`).
+This is how credentials for a protected server are supplied; a server that
+rejects them fails the run at discovery, before any load traffic.
+
 ### DISC-7: `test_endpoint` under a proxy
 When an explicit proxy is in use the override cannot be honoured; the proxy
 dials the origin, and a warning names the ignored endpoint.

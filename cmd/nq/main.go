@@ -50,6 +50,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		idleProbes   = fs.Int("idle-probes", netquality.DefaultIdleProbes, "number of idle latency probes")
 		interval     = fs.Duration("interval", 0, "stability interval (default 1s; draft says 5s)")
 		insecure     = fs.Bool("insecure", false, "skip TLS certificate verification (self-hosted dev servers)")
+		authToken    = fs.String("auth-token", os.Getenv("NQ_AUTH_TOKEN"), "bearer token for a protected server (env NQ_AUTH_TOKEN)")
 		jsonOut      = fs.Bool("json", false, "print the Result as JSON")
 		events       = fs.Bool("events", false, "stream progress events as JSON lines to stderr")
 		verbose      = fs.Bool("v", false, "verbose logging to stderr")
@@ -101,6 +102,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 		IdleProbes:  *idleProbes,
 	}
 	opts.Stability.Interval = *interval
+	if *authToken != "" {
+		opts.Header = http.Header{"Authorization": {"Bearer " + *authToken}}
+	}
 	switch {
 	case *downloadOnly:
 		opts.Directions = netquality.Download

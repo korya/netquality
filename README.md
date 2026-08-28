@@ -113,7 +113,39 @@ nq --well-known localhost:8443 --insecure
 For real deployments pass `--cert/--key`; `--base-url` sets the advertised URL
 prefix when behind a load balancer, `--test-endpoint` advertises a specific
 host. The server needs HTTP/2 end to end and must not compress or redirect.
-It is correct, not hardened: put it behind something that rate-limits.
+
+**Access control.** With a real certificate the server refuses to start
+anonymously; give it a token and give the client the same one:
+
+```
+NQSERVER_AUTH_TOKEN=s3cret nqserver --cert c.pem --key k.pem
+NQ_AUTH_TOKEN=s3cret nq --well-known nq.example.com
+```
+
+(`--auth-token` works on both; the environment keeps the secret out of `ps`.)
+Every endpoint, config included, answers `401` without the token. Library
+callers set `Options.Header`. `--allow-anonymous` opts out explicitly;
+`--self-signed` implies it for local development.
+
+**Load limits** protect egress without biasing measurements — they gate
+whether a request may *start*, never slow one down:
+
+| Flag | Default | Effect |
+|---|---|---|
+| `--client-bytes` / `--client-window` | 8 GiB / 10 min (unlimited with `--self-signed`) | per client IP; a refused request gets `429` + `Retry-After` |
+| `--upload-size` | 16 GiB | bytes accepted by one upload |
+| `--large-size` | 8 GiB | bytes served by one download |
+| `--max-connections` | 256 | extra connections wait in the accept queue |
+
+Behind a load balancer the client key is the balancer's address; the server
+deliberately does not trust `X-Forwarded-For`. Signed, expiring URLs (no
+secret on clients) are planned as an alternative to the token.
+
+**mTLS** works today without a flag: wrap `server.Handler` in your own
+`http.Server` with `TLSConfig.ClientAuth = tls.RequireAndVerifyClientCert`
+and `ClientCAs`, and give the client its certificate via
+`Options.HTTPClient.Transport.TLSClientConfig.Certificates`. A `--client-ca`
+flag is tracked in issue #10.
 
 ## Proxies
 

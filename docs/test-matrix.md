@@ -112,7 +112,18 @@ directory relative to the repo root; `.` is the library.
 | TLS | Self-signed cert covers hosts/IPs, h2 ALPN | server | TestSelfSignedCert |
 | Binary | Usage/version/no-TLS/bad cert/bad listen exit codes | cmd/nqserver | TestUsageAndVersion |
 | Binary | `--self-signed` server passes a full `nq` run | cmd/nqserver | TestServeSelfSignedEndToEnd |
-| Binary | `--cert/--key` + `--base-url` | cmd/nqserver | TestServeWithCertFilesAndBaseURL |
+| Binary | `--cert/--key` + `--base-url`; anonymous request 401, token 200 | cmd/nqserver | TestServeWithCertFilesAndBaseURL |
+| Binary | Token from `NQSERVER_AUTH_TOKEN`; `--allow-anonymous` with a real cert | cmd/nqserver | TestTokenFromEnvAndAnonymousOptIn |
+| Auth | Bearer parsing: case, whitespace, wrong/prefix/suffix, wrong scheme, oversized, unicode | server | TestAuthorize |
+| Auth | Every route returns 401 + WWW-Authenticate without the token | server | TestHandlerAuthOnEveryRoute |
+| Limits | Per-client budget: allow while positive, charge actual bytes, refill, per-IP | server | TestClientBudget |
+| Limits | 429 + Retry-After when exhausted; config and small exempt; upload cap | server | TestHandlerBudgetAndUploadCap |
+| Limits | Connection cap blocks the N+1th accept and releases on close | server | TestLimitListener |
+| Auth (client) | `Options.Header` reaches config, small, large and upload; overrides User-Agent | . | TestHeadersReachEveryRoute |
+| Auth (client) | Full run with token; wrong/missing/Basic/oversized/empty fail at discovery with 401 and zero load bytes | . | TestTokenProtectedServer |
+| Limits (client) | Budget exhausted mid-run ends with a flagged flow_error, not a hang | . | TestBudgetExhaustedMidRunIsGraceful |
+| Limits (client) | Run completes under a server connection cap | . | TestConnectionCapDoesNotBreakRun |
+| `--auth-token` | Flag and `NQ_AUTH_TOKEN`; 401 exits 1 | cmd/nq | TestAuthTokenFlagAndEnv |
 | Build info | ldflags rendering | internal/buildinfo | TestBuildInfoString |
 
 ## Live (real networks; `NQ_LIVE=1`)

@@ -1,4 +1,4 @@
-package netquality
+package engine
 
 import (
 	"math"
@@ -45,8 +45,8 @@ type LatencySample struct {
 	Staged  bool          // true when DNS/Connect/TLS/TTFB are populated (fresh connection)
 }
 
-// tlsPerRTT returns the TLS handshake time normalised to one round trip.
-func (s LatencySample) tlsPerRTT() time.Duration {
+// TLSPerRTT returns the TLS handshake time normalised to one round trip.
+func (s LatencySample) TLSPerRTT() time.Duration {
 	if s.TLSRTTs <= 0 {
 		return 0
 	}
@@ -130,9 +130,9 @@ func trimmedMean(d []time.Duration, p float64) time.Duration {
 	return time.Duration(sum / float64(n))
 }
 
-// computeLatencyStats builds LatencyStats from samples, using Total as the headline
+// ComputeLatencyStats builds LatencyStats from samples, using Total as the headline
 // value. Stage medians are computed only over staged samples.
-func computeLatencyStats(samples []LatencySample) LatencyStats {
+func ComputeLatencyStats(samples []LatencySample) LatencyStats {
 	totals := durationsOf(samples, func(s LatencySample) time.Duration { return s.Total })
 	st := statsOf(totals)
 	var staged []LatencySample
@@ -149,7 +149,7 @@ func computeLatencyStats(samples []LatencySample) LatencyStats {
 			DNS:       med(func(s LatencySample) time.Duration { return s.DNS }),
 			Connect:   med(func(s LatencySample) time.Duration { return s.Connect }),
 			TLS:       med(func(s LatencySample) time.Duration { return s.TLS }),
-			TLSPerRTT: med(func(s LatencySample) time.Duration { return s.tlsPerRTT() }),
+			TLSPerRTT: med(func(s LatencySample) time.Duration { return s.TLSPerRTT() }),
 			TTFB:      med(func(s LatencySample) time.Duration { return s.TTFB }),
 		}
 	}
@@ -200,4 +200,32 @@ func rpm(rtt time.Duration) float64 {
 		return 0
 	}
 	return 60000 / (float64(rtt) / float64(time.Millisecond))
+}
+
+// Responsiveness computes the draft's RPM figures over a sample set.
+func Responsiveness(foreign, self []LatencySample, tmp float64) (total, foreignRPM, selfRPM float64) {
+	if len(foreign) > 0 {
+		tcp := trimmedMean(durationsOf(foreign, func(s LatencySample) time.Duration { return s.Connect }), tmp)
+		tlsd := trimmedMean(durationsOf(foreign, func(s LatencySample) time.Duration { return s.TLSPerRTT() }), tmp)
+		httpf := trimmedMean(durationsOf(foreign, func(s LatencySample) time.Duration { return s.HTTP }), tmp)
+		var rtt time.Duration
+		if tlsd > 0 {
+			rtt = (tcp + tlsd + httpf) / 3
+		} else {
+			rtt = (tcp + httpf) / 2 // TCP-only case, draft 5.3.1.2
+		}
+		foreignRPM = rpm(rtt)
+	}
+	if len(self) > 0 {
+		selfRPM = rpm(trimmedMean(durationsOf(self, func(s LatencySample) time.Duration { return s.HTTP }), tmp))
+	}
+	switch {
+	case foreignRPM > 0 && selfRPM > 0:
+		total = (foreignRPM + selfRPM) / 2
+	case foreignRPM > 0:
+		total = foreignRPM
+	default:
+		total = selfRPM
+	}
+	return
 }

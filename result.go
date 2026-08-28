@@ -3,6 +3,28 @@ package netquality
 import (
 	"context"
 	"time"
+
+	"github.com/korya/netquality/internal/engine"
+)
+
+// Latency types and the Confidence score live in the engine package; these
+// aliases keep them part of the public API.
+type (
+	// LatencyStats summarises a set of latency samples (see engine.LatencyStats).
+	LatencyStats = engine.LatencyStats
+	// StageMedians holds per-stage medians from net/http/httptrace.
+	StageMedians = engine.StageMedians
+	// LatencySample is one probe measurement.
+	LatencySample = engine.LatencySample
+	// Confidence is the draft's Section 5.4.1 confidence score.
+	Confidence = engine.Confidence
+)
+
+// Confidence levels.
+const (
+	ConfidenceLow    = engine.ConfidenceLow
+	ConfidenceMedium = engine.ConfidenceMedium
+	ConfidenceHigh   = engine.ConfidenceHigh
 )
 
 // Result is the outcome of a run. It serialises to JSON with stable snake_case

@@ -30,9 +30,9 @@ directory relative to the repo root; `.` is the library.
 | Skipping | `IdleProbes < 0` skips the phase | . | TestRunDirections |
 | Cancellation | Context cancelled during idle probes returns partial result | . | TestCancelDuringIdle |
 | TLS normalisation | TLS 1.2 handshake counted as 2 RTTs, TLS 1.3 as 1 | . | TestTLS12Normalisation |
-| Statistics | min/median/mean/p95/jitter/trimmed mean | . | TestStatsOf |
-| Statistics | Percentile and single-sided trimmed mean | . | TestPercentileAndTrimmedMean |
-| Statistics | Stage medians only from staged samples | . | TestComputeLatencyStatsStages |
+| Statistics | min/median/mean/p95/jitter/trimmed mean | internal/engine | TestStatsOf |
+| Statistics | Percentile and single-sided trimmed mean | internal/engine | TestPercentileAndTrimmedMean |
+| Statistics | Stage medians only from staged samples | internal/engine | TestComputeLatencyStatsStages |
 
 ## Load phases
 
@@ -40,16 +40,19 @@ directory relative to the repo root; `.` is the library.
 |---|---|---|---|
 | Download + upload | Both phases sequentially, HTTP/2, flows ≤ MaxFlows, self+foreign probes | . | TestRunLoopback |
 | Direction selection | Download-only / upload-only | . | TestRunDirections |
-| Stability algorithm | Draft moving-average criterion, confidence levels (table) | . | TestStabilityTracker |
-| Stability algorithm | Moving-average window arithmetic | . | TestStabilityTrackerMovingAverage |
-| Stability parameters | Defaults and partial overrides | . | TestDefaultStabilityParams |
+| Stability algorithm | Draft moving-average criterion, confidence levels (table) | internal/engine | TestStabilityTracker |
+| Stability algorithm | Moving-average window arithmetic | internal/engine | TestStabilityTrackerMovingAverage |
+| Stability parameters | Defaults and partial overrides | internal/engine | TestDefaultStabilityParams |
 | Flow ramp | One flow per interval up to MaxFlows (fake clock) | . | TestMaxFlowsWithFakeClock |
 | HTTP/1.1 fallback | No self probes, RPM from foreign probes, warning | . | TestHTTP11Fallback |
 | Flow error | Failure before any interval aborts the run | . | TestFlowErrorAbortsPhase |
 | Flow error | Failure after intervals truncates with `flow_error`, keeps data | . | TestFlowErrorAfterIntervalsKeepsResult |
-| RPM | Draft formula incl. TCP-only case | . | TestResponsiveness |
-| RPM | `60000 / RTT` | . | TestRPM |
+| RPM | Draft formula incl. TCP-only case | internal/engine | TestResponsiveness |
+| RPM | `60000 / RTT` | internal/engine | TestRPM |
 | Events | Phase/interval/probe/flow/warning events with consistent counts | . | TestEventStream |
+| Engine | Per-interval decisions reproduce the pre-extraction loop on a recorded Cloudflare series and synthetic links | internal/engine | TestEngineMatchesReferenceLoop |
+| Engine | Probe spacing: 1/MPS floor, PTC stretch on slow links | internal/engine | TestEngineProbeGap |
+| Engine | Summary with no completed interval; InitialFlows capped by MaxFlows | internal/engine | TestEngineSummaryFallbacks |
 
 ## Safety limits
 

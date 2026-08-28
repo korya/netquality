@@ -6,14 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/korya/netquality/internal/engine"
 	"io"
-	"math"
 	"math/rand"
 	"net/http"
 	"net/url"
 	"sync"
-	"sync/atomic"
-	"time"
 )
 
 // Run executes the responsiveness test against t and returns the Result.
@@ -227,7 +225,7 @@ func (r *runner) idle(ctx context.Context) (*LatencyStats, error) {
 		}
 		return nil, lastErr
 	}
-	st := computeLatencyStats(samples)
+	st := engine.ComputeLatencyStats(samples)
 	return &st, nil
 }
 
@@ -236,14 +234,12 @@ type phaseState struct {
 	dir     Directions
 	url     string
 	bytes   *byteCounter
-	goodput atomic.Uint64 // float64 bits of the current moving-average goodput (bps)
+	eng     *engine.Engine
 	flows   []*flow
 	flowsMu sync.Mutex
 
 	samplesMu sync.Mutex
-	foreign   [][]LatencySample // per interval
-	self      [][]LatencySample
-	curF      []LatencySample
+	curF      []LatencySample // samples of the interval in progress
 	curS      []LatencySample
 
 	stopOnce sync.Once
@@ -270,32 +266,13 @@ func (p *phaseState) addSample(self bool, s LatencySample) {
 	}
 }
 
-// rotate closes the current interval's sample buckets.
-func (p *phaseState) rotate() {
+// take returns and clears the samples of the interval in progress.
+func (p *phaseState) take() (foreign, self []LatencySample) {
 	p.samplesMu.Lock()
 	defer p.samplesMu.Unlock()
-	p.foreign = append(p.foreign, p.curF)
-	p.self = append(p.self, p.curS)
+	foreign, self = p.curF, p.curS
 	p.curF, p.curS = nil, nil
-}
-
-// window returns samples from the last n completed intervals.
-func (p *phaseState) window(n int) (foreign, self []LatencySample) {
-	p.samplesMu.Lock()
-	defer p.samplesMu.Unlock()
-	start := len(p.foreign) - n
-	if start < 0 {
-		start = 0
-	}
-	for i := start; i < len(p.foreign); i++ {
-		foreign = append(foreign, p.foreign[i]...)
-		self = append(self, p.self[i]...)
-	}
 	return
-}
-
-func (p *phaseState) all() (foreign, self []LatencySample) {
-	return p.window(len(p.foreign) + 1)
 }
 
 func (p *phaseState) pickFlow(rng *rand.Rand) *flow {
@@ -328,34 +305,6 @@ func (p *phaseState) proto() string {
 		}
 	}
 	return ""
-}
-
-// responsiveness computes the draft's RPM figures over a sample set.
-func responsiveness(foreign, self []LatencySample, tmp float64) (total, foreignRPM, selfRPM float64) {
-	if len(foreign) > 0 {
-		tcp := trimmedMean(durationsOf(foreign, func(s LatencySample) time.Duration { return s.Connect }), tmp)
-		tlsd := trimmedMean(durationsOf(foreign, func(s LatencySample) time.Duration { return s.tlsPerRTT() }), tmp)
-		httpf := trimmedMean(durationsOf(foreign, func(s LatencySample) time.Duration { return s.HTTP }), tmp)
-		var rtt time.Duration
-		if tlsd > 0 {
-			rtt = (tcp + tlsd + httpf) / 3
-		} else {
-			rtt = (tcp + httpf) / 2 // TCP-only case, draft 5.3.1.2
-		}
-		foreignRPM = rpm(rtt)
-	}
-	if len(self) > 0 {
-		selfRPM = rpm(trimmedMean(durationsOf(self, func(s LatencySample) time.Duration { return s.HTTP }), tmp))
-	}
-	switch {
-	case foreignRPM > 0 && selfRPM > 0:
-		total = (foreignRPM + selfRPM) / 2
-	case foreignRPM > 0:
-		total = foreignRPM
-	default:
-		total = selfRPM
-	}
-	return
 }
 
 // loadPhase runs one direction: ramp flows, probe, evaluate stability, stop on
@@ -397,13 +346,12 @@ func (r *runner) loadPhase(ctx context.Context, dir Directions) (*DirectionResul
 			}
 		}()
 	}
-	for i := 0; i < sp.InitialFlows && i < r.opts.MaxFlows; i++ {
+	p.eng = engine.New(sp, r.opts.MaxFlows)
+	for i := 0; i < p.eng.InitialFlows(); i++ {
 		addFlow()
 	}
 
 	// Probe scheduler.
-	tp := newStabilityTracker(sp.MovingAverageDistance, sp.StdDevTolerance)
-	rp := newStabilityTracker(sp.MovingAverageDistance, sp.StdDevTolerance)
 	var probeWG sync.WaitGroup
 	probeWG.Add(1)
 	go func() {
@@ -415,9 +363,7 @@ func (r *runner) loadPhase(ctx context.Context, dir Directions) (*DirectionResul
 	tick := r.opts.clock.NewTicker(sp.Interval)
 	defer tick.Stop()
 	dr := &DirectionResult{Direction: dir.String()}
-	var lastBytes int64
 	var lastTick = start
-	goodputStable := false
 loop:
 	for {
 		select {
@@ -433,46 +379,24 @@ loop:
 			}
 			lastTick = now
 			cur := p.bytes.get()
-			goodput := float64(cur-lastBytes) * 8 / elapsed.Seconds()
-			lastBytes = cur
-			if goodput > dr.PeakThroughputBPS {
-				dr.PeakThroughputBPS = goodput
-			}
-			avg := tp.push(goodput)
-			p.goodput.Store(math.Float64bits(avg))
-			dr.Intervals++
-			p.rotate()
-
+			f, sl := p.take()
+			d := p.eng.Interval(engine.Observation{Elapsed: elapsed, Bytes: cur, Flows: p.flowCount(), Foreign: f, Self: sl})
+			dr.Intervals = d.Interval
 			ev := Event{Kind: EventInterval, Phase: dir.String(), Direction: dir.String(),
-				Interval: dr.Intervals, Flows: p.flowCount(), ThroughputBPS: avg, Bytes: cur}
-			if !goodputStable && tp.stable() {
-				goodputStable = true
-				r.opts.Logger.Info("throughput stable", "dir", dir.String(), "bps", avg, "interval", dr.Intervals)
-			}
-			if goodputStable {
-				f, s := p.window(sp.MovingAverageDistance)
-				cur, _, _ := responsiveness(f, s, sp.TrimmedMeanPercent)
-				ev.RPM = cur
-				if cur > 0 {
-					rp.push(cur)
-				}
-				if rp.stable() {
-					r.emit(ev)
-					r.opts.Logger.Info("responsiveness stable", "dir", dir.String(), "rpm", cur)
-					p.stop(ReasonNone)
-					break loop
-				}
-			}
+				Interval: d.Interval, Flows: p.flowCount(), ThroughputBPS: d.ThroughputBPS, Bytes: cur, RPM: d.RPM}
 			r.emit(ev)
-			if p.flowCount() < r.opts.MaxFlows {
-				for i := 0; i < sp.FlowIncrement && p.flowCount() < r.opts.MaxFlows; i++ {
-					addFlow()
-				}
+			if d.Stop {
+				r.opts.Logger.Info("responsiveness stable", "dir", dir.String(), "rpm", d.RPM)
+				p.stop(ReasonNone)
+				break loop
+			}
+			for i := 0; i < d.AddFlows; i++ {
+				addFlow()
 			}
 		}
 	}
 	// Determine why we stopped, then tear everything down.
-	if p.reason == ReasonNone && pctx.Err() != nil && (!goodputStable || !rp.stable()) {
+	if p.reason == ReasonNone && pctx.Err() != nil && !p.eng.Stopped() {
 		p.stop(ctxReason(pctx))
 	}
 	cancel()
@@ -489,47 +413,40 @@ loop:
 	dr.Flows = p.flowCount()
 	dr.FlowErrors = p.flowErrs
 	dr.HTTPVersion = p.proto()
-	dr.ThroughputBPS = tp.current()
+	curF, curS := p.take()
+	sum := p.eng.Summary(curF, curS)
+	dr.ThroughputBPS = sum.ThroughputBPS
+	dr.PeakThroughputBPS = sum.PeakThroughputBPS
 	if dr.Duration > 0 {
 		dr.MeanThroughputBPS = float64(dr.Bytes) * 8 / dr.Duration.Seconds()
 	}
 	if dr.Intervals == 0 {
 		dr.ThroughputBPS = dr.MeanThroughputBPS
 	}
-	dr.ThroughputStable = tp.stable()
-	dr.ThroughputConfidence = tp.confidence()
-	dr.ResponsivenessStable = rp.stable()
-	dr.ResponsivenessConfidence = rp.confidence()
-	if !goodputStable {
-		dr.ResponsivenessConfidence = ConfidenceLow
-	}
+	dr.ThroughputStable = sum.ThroughputStable
+	dr.ThroughputConfidence = sum.ThroughputConfidence
+	dr.ResponsivenessStable = sum.ResponsivenessStable
+	dr.ResponsivenessConfidence = sum.ResponsivenessConfidence
 	dr.Reason = p.reason
 	dr.Truncated = p.reason != ReasonNone
-
-	// Final latency figures: the draft uses the last MAD intervals; if the phase
-	// was cut short before MAD intervals completed, use everything we have.
-	f, s := p.window(sp.MovingAverageDistance)
-	if len(f)+len(s) == 0 {
-		f, s = p.all()
-	}
-	dr.RPM, dr.ForeignRPM, dr.SelfRPM = responsiveness(f, s, sp.TrimmedMeanPercent)
-	if len(f) > 0 {
-		st := computeLatencyStats(f)
+	dr.RPM, dr.ForeignRPM, dr.SelfRPM = sum.RPM, sum.ForeignRPM, sum.SelfRPM
+	if len(sum.Foreign) > 0 {
+		st := engine.ComputeLatencyStats(sum.Foreign)
 		dr.Loaded.Foreign = &st
 	}
-	if len(s) > 0 {
-		st := computeLatencyStats(s)
+	if len(sum.Self) > 0 {
+		st := engine.ComputeLatencyStats(sum.Self)
 		dr.Loaded.Self = &st
 	}
-	if len(f)+len(s) > 0 {
-		combined := make([]LatencySample, 0, len(f)+len(s))
-		for _, x := range f {
+	if len(sum.Foreign)+len(sum.Self) > 0 {
+		combined := make([]LatencySample, 0, len(sum.Foreign)+len(sum.Self))
+		for _, x := range sum.Foreign {
 			combined = append(combined, LatencySample{Total: x.HTTP})
 		}
-		for _, x := range s {
+		for _, x := range sum.Self {
 			combined = append(combined, LatencySample{Total: x.HTTP})
 		}
-		st := computeLatencyStats(combined)
+		st := engine.ComputeLatencyStats(combined)
 		dr.Loaded.Combined = &st
 	}
 
@@ -556,7 +473,6 @@ loop:
 // probeLoop launches interleaved foreign and self probes at a rate bounded by
 // MPS and by PTC of the current goodput estimate.
 func (r *runner) probeLoop(ctx context.Context, p *phaseState) {
-	sp := r.opts.Stability
 	rng := rand.New(rand.NewSource(r.opts.clock.Now().UnixNano())) //nolint:gosec // flow selection only
 	foreignRT := r.factory.newTransport(false)
 	defer closeIdle(foreignRT)
@@ -608,13 +524,7 @@ func (r *runner) probeLoop(ctx context.Context, p *phaseState) {
 	for {
 		// Interval between individual probes: 1/MPS, stretched so that probe
 		// traffic stays under PTC of the measured goodput.
-		gap := time.Second / time.Duration(sp.MaxProbesPerSecond)
-		if bps := math.Float64frombits(p.goodput.Load()); bps > 0 {
-			perProbe := float64(foreignProbeBytes+selfProbeBytes) / 2 * 8
-			if g := time.Duration(perProbe / (sp.ProbeCapacityPercent * bps) * float64(time.Second)); g > gap {
-				gap = g
-			}
-		}
+		gap := p.eng.ProbeGap(foreignProbeBytes, selfProbeBytes)
 		select {
 		case <-ctx.Done():
 			return

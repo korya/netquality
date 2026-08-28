@@ -1,4 +1,8 @@
-package netquality
+// Package engine holds the pure, clock-free measurement logic of netquality:
+// latency statistics, the draft's stability criterion, and (after extraction)
+// the per-interval decisions. It performs no I/O so it can be driven by real
+// transports or by a simulator.
+package engine
 
 import "time"
 
@@ -37,7 +41,7 @@ func DefaultStabilityParams() StabilityParams {
 	}
 }
 
-func (p StabilityParams) withDefaults() StabilityParams {
+func (p StabilityParams) WithDefaults() StabilityParams {
 	d := DefaultStabilityParams()
 	if p.MovingAverageDistance <= 0 {
 		p.MovingAverageDistance = d.MovingAverageDistance
@@ -66,23 +70,23 @@ func (p StabilityParams) withDefaults() StabilityParams {
 	return p
 }
 
-// stabilityTracker implements the draft's moving-average stability criterion
+// Tracker implements the draft's moving-average stability criterion
 // for a single series (goodput or responsiveness). It is deterministic and
 // independent of wall time: callers push one value per interval.
-type stabilityTracker struct {
+type Tracker struct {
 	mad       int
 	tolerance float64
 	raw       []float64 // per-interval values
 	averages  []float64 // moving averages (one per interval once enough data)
 }
 
-func newStabilityTracker(mad int, tolerance float64) *stabilityTracker {
-	return &stabilityTracker{mad: mad, tolerance: tolerance}
+func NewTracker(mad int, tolerance float64) *Tracker {
+	return &Tracker{mad: mad, tolerance: tolerance}
 }
 
-// push records the value for the current interval and returns the moving average
+// Push records the value for the current interval and returns the moving average
 // over the last MAD intervals (partial window while warming up).
-func (t *stabilityTracker) push(v float64) float64 {
+func (t *Tracker) Push(v float64) float64 {
 	t.raw = append(t.raw, v)
 	start := len(t.raw) - t.mad
 	if start < 0 {
@@ -97,26 +101,26 @@ func (t *stabilityTracker) push(v float64) float64 {
 	return avg
 }
 
-// current returns the most recent moving average.
-func (t *stabilityTracker) current() float64 {
+// Current returns the most recent moving average.
+func (t *Tracker) Current() float64 {
 	if len(t.averages) == 0 {
 		return 0
 	}
 	return t.averages[len(t.averages)-1]
 }
 
-// intervals returns how many values have been pushed.
-func (t *stabilityTracker) intervals() int { return len(t.raw) }
+// Intervals returns how many values have been pushed.
+func (t *Tracker) Intervals() int { return len(t.raw) }
 
-// stable reports whether the standard deviation of the last MAD moving averages
+// Stable reports whether the standard deviation of the last MAD moving averages
 // is within tolerance of the current moving average. Requires at least MAD
 // intervals (draft: "Low" confidence otherwise).
-func (t *stabilityTracker) stable() bool {
+func (t *Tracker) Stable() bool {
 	if len(t.averages) < t.mad {
 		return false
 	}
 	window := t.averages[len(t.averages)-t.mad:]
-	cur := t.current()
+	cur := t.Current()
 	if cur <= 0 {
 		return false
 	}
@@ -135,11 +139,11 @@ const (
 	ConfidenceHigh Confidence = "high"
 )
 
-func (t *stabilityTracker) confidence() Confidence {
+func (t *Tracker) Confidence() Confidence {
 	switch {
-	case t.stable():
+	case t.Stable():
 		return ConfidenceHigh
-	case t.intervals() >= t.mad:
+	case t.Intervals() >= t.mad:
 		return ConfidenceMedium
 	default:
 		return ConfidenceLow

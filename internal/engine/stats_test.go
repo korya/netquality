@@ -1,4 +1,4 @@
-package netquality
+package engine
 
 import (
 	"testing"
@@ -52,14 +52,14 @@ func TestComputeLatencyStatsStages(t *testing.T) {
 		{Total: ms(40), Connect: ms(12), TLS: ms(10), TLSRTTs: 1, TTFB: ms(7), Staged: true},
 		{Total: ms(5)}, // self probe: no stages
 	}
-	st := computeLatencyStats(samples)
+	st := ComputeLatencyStats(samples)
 	if st.Samples != 3 || st.Stages == nil {
 		t.Fatalf("%+v", st)
 	}
 	if st.Stages.Connect != ms(11) || st.Stages.TLSPerRTT != ms(10) || st.Stages.TTFB != ms(6) {
 		t.Errorf("%+v", *st.Stages)
 	}
-	if computeLatencyStats([]LatencySample{{Total: ms(1)}}).Stages != nil {
+	if ComputeLatencyStats([]LatencySample{{Total: ms(1)}}).Stages != nil {
 		t.Error("unstaged samples must not produce stage medians")
 	}
 }
@@ -76,16 +76,16 @@ func TestRPM(t *testing.T) {
 func TestResponsiveness(t *testing.T) {
 	foreign := []LatencySample{{Connect: ms(10), TLS: ms(10), TLSRTTs: 1, HTTP: ms(10), Staged: true}}
 	self := []LatencySample{{HTTP: ms(20)}}
-	total, f, s := responsiveness(foreign, self, 95)
+	total, f, s := Responsiveness(foreign, self, 95)
 	if f != 6000 || s != 3000 || total != 4500 {
 		t.Errorf("got %v %v %v", total, f, s)
 	}
 	// TCP-only: tls ignored, (10+30)/2 = 20ms -> 3000
-	total, f, _ = responsiveness([]LatencySample{{Connect: ms(10), HTTP: ms(30), Staged: true}}, nil, 95)
+	total, f, _ = Responsiveness([]LatencySample{{Connect: ms(10), HTTP: ms(30), Staged: true}}, nil, 95)
 	if f != 3000 || total != 3000 {
 		t.Errorf("tcp-only got %v %v", total, f)
 	}
-	if total, _, _ = responsiveness(nil, nil, 95); total != 0 {
+	if total, _, _ = Responsiveness(nil, nil, 95); total != 0 {
 		t.Error("empty")
 	}
 }

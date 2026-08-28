@@ -50,6 +50,9 @@ directory relative to the repo root; `.` is the library.
 | RPM | Draft formula incl. TCP-only case | internal/engine | TestResponsiveness |
 | RPM | `60000 / RTT` | internal/engine | TestRPM |
 | Events | Phase/interval/probe/flow/warning events with consistent counts | . | TestEventStream |
+| Engine | Per-interval decisions reproduce the pre-extraction loop on a recorded Cloudflare series and synthetic links | internal/engine | TestEngineMatchesReferenceLoop |
+| Engine | Probe spacing: 1/MPS floor, PTC stretch on slow links | internal/engine | TestEngineProbeGap |
+| Engine | Summary with no completed interval; InitialFlows capped by MaxFlows | internal/engine | TestEngineSummaryFallbacks |
 
 ## Safety limits
 

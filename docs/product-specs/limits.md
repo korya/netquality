@@ -11,10 +11,13 @@ Prefix: `LIM`.
 before both series are stable ends the phase with `truncated=true,
 reason=duration_cap` and a warning.
 
-### LIM-2: Byte cap
-`MaxBytes` (default 250 MiB) bounds bytes moved per direction, counting load
-payload plus a fixed estimate per probe (5000 B foreign, 1000 B self).
-Reaching it ends the phase with `reason=bytes_cap` and a warning.
+### LIM-2: Byte cap (opt-in)
+There is no byte cap by default: time is the budget, so a run costs at most
+link rate × `MaxDuration` per direction and can reach a confident result at
+any speed. A caller on a metered link sets `MaxBytes` (> 0), which then
+bounds bytes moved per direction, counting load payload plus a fixed estimate
+per probe (5000 B foreign, 1000 B self); reaching it ends the phase with
+`reason=bytes_cap` and a warning. `MaxBytes` ≤ 0 means unlimited.
 
 ### LIM-3: Flow cap
 `MaxFlows` (default 16) is never exceeded in any direction.

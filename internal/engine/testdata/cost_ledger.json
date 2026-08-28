@@ -1,19 +1,11 @@
 {
-  "10G unlimited bytes": {
-    "bytes": 8595478750,
-    "seconds": 7
-  },
-  "1G unlimited bytes": {
-    "bytes": 978087175,
+  "bloated 1.00G": {
+    "bytes": 967419763,
     "seconds": 8
   },
-  "bloated 1.00G": {
-    "bytes": 262419763,
-    "seconds": 2.36
-  },
   "bloated 10.00G": {
-    "bytes": 274631769,
-    "seconds": 0.58
+    "bytes": 12049631769,
+    "seconds": 10
   },
   "bloated 100.0M": {
     "bytes": 135483770,
@@ -24,8 +16,8 @@
     "seconds": 11
   },
   "bloated 400.0M": {
-    "bytes": 262449508,
-    "seconds": 5.47
+    "bytes": 388949508,
+    "seconds": 8
   },
   "bloated 5.0M": {
     "bytes": 6850677,
@@ -36,32 +28,32 @@
     "seconds": 8
   },
   "cdn per-flow cap 200M on 1G": {
-    "bytes": 262597652,
-    "seconds": 4.23
+    "bytes": 1233847652,
+    "seconds": 12
   },
   "clean 1.00G rtt=10ms": {
-    "bytes": 262528750,
-    "seconds": 2.19
+    "bytes": 863778750,
+    "seconds": 7
   },
   "clean 1.00G rtt=150ms": {
-    "bytes": 262278214,
-    "seconds": 3.38
+    "bytes": 1214778214,
+    "seconds": 11
   },
   "clean 1.00G rtt=50ms": {
-    "bytes": 262349624,
-    "seconds": 2.53
+    "bytes": 1196099624,
+    "seconds": 10
   },
   "clean 10.00G rtt=10ms": {
-    "bytes": 270478750,
-    "seconds": 0.34
+    "bytes": 8595478750,
+    "seconds": 7
   },
   "clean 10.00G rtt=150ms": {
-    "bytes": 262986877,
-    "seconds": 1.99
+    "bytes": 12775427111,
+    "seconds": 12
   },
   "clean 10.00G rtt=50ms": {
-    "bytes": 265858510,
-    "seconds": 0.81
+    "bytes": 13003358510,
+    "seconds": 11
   },
   "clean 100.0M rtt=10ms": {
     "bytes": 86783750,
@@ -88,16 +80,16 @@
     "seconds": 8
   },
   "clean 400.0M rtt=10ms": {
-    "bytes": 262638750,
-    "seconds": 5.33
+    "bytes": 346138750,
+    "seconds": 7
   },
   "clean 400.0M rtt=150ms": {
-    "bytes": 262293483,
-    "seconds": 6.33
+    "bytes": 495793483,
+    "seconds": 11
   },
   "clean 400.0M rtt=50ms": {
-    "bytes": 262238456,
-    "seconds": 5.61
+    "bytes": 481738456,
+    "seconds": 10
   },
   "clean 5.0M rtt=10ms": {
     "bytes": 4365000,
@@ -110,6 +102,18 @@
   "clean 5.0M rtt=50ms": {
     "bytes": 4335962,
     "seconds": 7
+  },
+  "metered 250MiB on 1G": {
+    "bytes": 263087175,
+    "seconds": 2.28
+  },
+  "metered 250MiB on 30M (never bites)": {
+    "bytes": 25836583,
+    "seconds": 7
+  },
+  "metered 250MiB on 400M": {
+    "bytes": 262449508,
+    "seconds": 5.47
   },
   "shaper burst 20MB on 50M": {
     "bytes": 95086000,

@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Changed
+- **No byte cap by default.** `MaxBytes` defaults to 0 (unlimited) and
+  `nq --max-bytes` is omitted unless the link is metered; `MaxDuration`
+  (12 s per direction) is the budget, so cost is at most link rate × 12 s and
+  a confident result is reachable at any speed. Previously a 250 MiB cap
+  truncated every run above ~250 Mbps with low confidence (#3). Slow links
+  are unaffected. Set `MaxBytes` on metered links for the old behaviour.
+
+### Changed
 - Latency percentiles are honest about sample size: `p95_ns` is present only
   from 20 samples, and `p80_ns` (from 5), `p90_ns` (from 10) and `p99_ns`
   (from 100) are added. Previously `p95_ns` of the five idle probes was

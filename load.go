@@ -29,8 +29,10 @@ type byteCounter struct {
 	onLimit func()
 }
 
+// add counts n bytes and trips onLimit once when a positive limit is reached;
+// a limit of 0 means unlimited.
 func (c *byteCounter) add(n int64) {
-	if c.total.Add(n) >= c.limit {
+	if t := c.total.Add(n); c.limit > 0 && t >= c.limit {
 		c.once.Do(c.onLimit)
 	}
 }

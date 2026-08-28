@@ -69,6 +69,8 @@ directory relative to the repo root; `.` is the library.
 |---|---|---|---|
 | MaxBytes | Download truncated with `bytes_cap`, warning, mean throughput fallback | . | TestBytesCap |
 | MaxBytes | Upload truncated with `bytes_cap` | . | TestUploadBytesCap |
+| MaxBytes | Counter: limit 0 never trips, positive limit trips exactly once | . | TestByteCounterLimits |
+| MaxBytes | Default run on loopback is time-bound only, never `bytes_cap` | . | TestNoByteCapByDefault |
 | MaxDuration | Truncated with `duration_cap` when never stable | . | TestDurationCap |
 | MaxFlows | Never exceeded | . | TestMaxFlowsWithFakeClock |
 | Cancellation | Stops within ~250 ms, partial result flagged `cancelled` | . | TestCancellation |
@@ -180,7 +182,7 @@ ledger stays exact.
 
 | Feature | Scenario | Package | Test |
 |---|---|---|---|
-| Algorithm | 5 Mbps–10 Gbps × RTT 10/50/150 ms, bufferbloat, CDN per-flow cap, shaper burst, upload send buffer, tick jitter, mid-run capacity change, unlimited bytes | internal/engine | TestAlgorithmScenarios |
+| Algorithm | 5 Mbps–10 Gbps × RTT 10/50/150 ms, bufferbloat, CDN per-flow cap, shaper burst, upload send buffer, tick jitter, mid-run capacity change, metered byte caps (honest truncation) | internal/engine | TestAlgorithmScenarios |
 | Simulator | Delivers exactly capacity, never more | internal/linksim | TestModelDeliversCapacity |
 | Simulator | Queue adds queue/capacity of latency | internal/linksim | TestModelQueueAddsLatency |
 | Simulator | Token bucket bursts then sustains capacity | internal/linksim | TestModelShaperSustainsCapacity |

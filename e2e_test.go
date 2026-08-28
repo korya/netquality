@@ -320,12 +320,15 @@ func TestEventStream(t *testing.T) {
 
 func TestMaxFlowsDefaultAndOptionsDefaults(t *testing.T) {
 	o := Options{}.withDefaults()
-	if o.MaxDuration != DefaultMaxDuration || o.MaxBytes != DefaultMaxBytes || o.MaxFlows != DefaultMaxFlows ||
+	if o.MaxDuration != DefaultMaxDuration || o.MaxBytes != 0 || DefaultMaxBytes != 0 || o.MaxFlows != DefaultMaxFlows ||
 		o.IdleProbes != DefaultIdleProbes || o.ConfigTimeout != DefaultConfigTimeout || o.HTTPClient == nil || o.Logger == nil || o.clock == nil {
 		t.Errorf("%+v", o)
 	}
 	if (Options{IdleProbes: -1}).withDefaults().IdleProbes != -1 {
 		t.Error("negative IdleProbes must survive defaults")
+	}
+	if (Options{MaxBytes: -5}).withDefaults().MaxBytes != 0 {
+		t.Error("negative MaxBytes must mean unlimited")
 	}
 	for _, tc := range []struct {
 		d    Directions

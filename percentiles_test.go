@@ -45,7 +45,8 @@ func TestPercentilesEndToEnd(t *testing.T) {
 		if st.P80 == 0 || st.P90 == 0 || st.P95 == 0 || st.P99 == 0 {
 			t.Errorf("%s (%d samples): all four percentiles must be present: %+v", name, st.Samples, st)
 		}
-		if !(st.Min <= st.P80 && st.P80 <= st.P90 && st.P90 <= st.P95 && st.P95 <= st.P99 && st.P99 <= st.Max) {
+		ordered := st.Min <= st.P80 && st.P80 <= st.P90 && st.P90 <= st.P95 && st.P95 <= st.P99 && st.P99 <= st.Max
+		if !ordered {
 			t.Errorf("%s: percentiles not monotonic: %+v", name, st)
 		}
 	}

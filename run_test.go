@@ -64,6 +64,9 @@ func TestRunLoopback(t *testing.T) {
 	if res.Idle == nil || res.Idle.Samples != DefaultIdleProbes || res.Idle.Stages == nil {
 		t.Errorf("idle = %+v", res.Idle)
 	}
+	if res.SchemaVersion != ResultSchemaVersion || ResultSchemaVersion != 1 {
+		t.Errorf("schema_version = %d", res.SchemaVersion)
+	}
 	for _, d := range []*DirectionResult{res.Download, res.Upload} {
 		if d == nil {
 			t.Fatal("direction missing")
@@ -261,6 +264,9 @@ func TestResultJSONShape(t *testing.T) {
 	}
 	if _, ok := m["upload"]; ok {
 		t.Error("absent direction must be omitted")
+	}
+	if !strings.HasPrefix(string(data), `{"schema_version":`) {
+		t.Errorf("schema_version must be the first field: %.40s", data)
 	}
 	if tgt := m["target"].(map[string]any); tgt["local_ips"] != nil || tgt["resolved_ips"] != nil {
 		t.Errorf("empty address lists must be omitted: %v", tgt)

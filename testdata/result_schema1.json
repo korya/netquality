@@ -1,4 +1,5 @@
 {
+  "schema_version": 1,
   "target": {
     "config_url": "https://aim.cloudflare.com/responsiveness/api/v1/config",
     "host": "h3.speed.cloudflare.com",

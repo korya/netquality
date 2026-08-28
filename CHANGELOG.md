@@ -5,6 +5,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- `schema_version` (1) as the first field of `Result`, bumped only when a
+  field is renamed, removed, retyped, or changes meaning (#2).
+
 ### Fixed
 - Every load phase leaked one HTTP/2 connection and its read/write
   goroutines when a stream was still winding down at teardown (present since

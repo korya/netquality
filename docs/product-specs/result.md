@@ -8,8 +8,14 @@ Prefix: `RES`.
 ---
 
 ### RES-1: Top level
-`Result` carries `target`, `started_at`, `duration_ns`, optional `idle`,
-optional `download` and `upload`, `cancelled`, and `warnings`.
+`Result` carries `schema_version` first, then `target`, `started_at`,
+`duration_ns`, optional `idle`, optional `download` and `upload`,
+`cancelled`, and `warnings`.
+
+### RES-9: Schema version
+`schema_version` is an integer, currently 1, written on every result. It is
+bumped when a field is renamed, removed, retyped, or changes meaning; adding
+a field never bumps it. Every bump is recorded in the CHANGELOG.
 
 ### RES-2: Omission means not run
 `idle`, `download`, `upload`, `target.proxy`, `target.resolved_ips`,

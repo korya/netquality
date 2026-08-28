@@ -75,7 +75,9 @@ settings come through `Options.HTTPClient` (its `*http.Transport` is cloned per
 flow so each flow owns a connection). `Options.Logger` accepts a `*slog.Logger`.
 
 `Result` marshals to JSON with stable snake_case names; the CLI's `--json`
-output is exactly that struct. Directions that did not run are omitted, not
+output is exactly that struct. `schema_version` (currently 1) is its first
+field: it changes only when a field is renamed, removed, retyped, or changes
+meaning — never for additions — so stored documents stay interpretable. Directions that did not run are omitted, not
 zero. Each `DirectionResult` carries `truncated`, `reason`
 (`bytes_cap` | `duration_cap` | `cancelled` | `flow_error`) and the draft's
 `throughput_confidence` / `responsiveness_confidence` (`low` | `medium` | `high`).

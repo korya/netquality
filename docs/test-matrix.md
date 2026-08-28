@@ -88,7 +88,7 @@ directory relative to the repo root; `.` is the library.
 
 | Feature | Scenario | Package | Test |
 |---|---|---|---|
-| JSON | snake_case keys, absent directions and empty address lists omitted | . | TestResultJSONShape |
+| JSON | snake_case keys, `schema_version` first, absent directions and empty address lists omitted | . | TestResultJSONShape |
 | JSON | Marshal/unmarshal round-trip preserves a real Result | . | TestResultJSONRoundTrip |
 | Local addresses | Loopback run reports `local_ips` = 127.0.0.1 | . | TestRunLoopback |
 | Local addresses | Recorded under an explicit proxy (interface toward the proxy) | . | TestExplicitProxyDetected |
@@ -163,7 +163,7 @@ than describe a feature. Goldens are regenerated deliberately with
 | Wire contract | Identity encoding on every request, octet-stream POST uploads, GET elsewhere, fresh connection per idle/foreign probe, self probes on load connections | . | TestWireContract |
 | No global state | Differently configured runs in one process do not influence each other | . | TestRepeatedRunsAreIndependent |
 | INV-7 | Every JSON path and kind of `Result` pinned in `testdata/result_schema.txt`; snake_case enforced | . | TestResultSchemaGolden |
-| INV-7 | A v0.2.1 result document still parses with values intact; unknown fields ignored | . | TestOldResultDocumentsStillParse |
+| INV-7 | A stored schema-1 document parses with values intact; `schema_version` readable first; unknown fields ignored | . | TestStoredResultDocumentParses |
 | Parsers | Fuzz targets with seed corpora: config document, bearer parsing, signature verification, size flag (CI explores for a few seconds; seeds always run) | ., server, cmd/nq | FuzzParseServerConfig, FuzzAuthorize, FuzzVerifySignature, FuzzParseBytes |
 | Cost | Bytes and seconds per algorithm scenario pinned in `internal/engine/testdata/cost_ledger.json` (±15 %); a cheaper run must be recorded, a dearer one fails | internal/engine | TestAlgorithmScenarios |
 

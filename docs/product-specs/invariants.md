@@ -33,9 +33,10 @@ wins on the wire and the deviation is recorded in README "Deviations" with a
 one-line reason.
 
 ### INV-7: Stable JSON contract
-`Result` serialises with snake_case names that never change meaning. Fields
-may be added; existing ones are not renamed, retyped, or removed within a
-major version.
+`Result` serialises with snake_case names. Fields may be added freely;
+renaming, removing, retyping, or changing the meaning of a field bumps
+`schema_version` (RES-9) and is recorded in the CHANGELOG, so readers of
+stored documents can tell what they hold.
 
 ### INV-8: No GPL-derived code
 Reference implementations under GPL (e.g. `goresponsiveness`) may be read for

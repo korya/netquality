@@ -3,9 +3,12 @@ package netquality
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -17,13 +20,22 @@ type transportFactory struct {
 	custom       http.RoundTripper
 	testEndpoint string // dial override host (draft "test_endpoint"), "" if none
 	urlHost      string // host[:port] from the config URLs
+	urlHostPort  string // urlHost with the scheme's default port filled in
 	dialTimeout  time.Duration
 	resolvedIPs  atomic.Pointer[[]string]
 }
 
-func newTransportFactory(client *http.Client, cfg *ServerConfig, urlHost string) (*transportFactory, []string) {
+func newTransportFactory(client *http.Client, cfg *ServerConfig, u *url.URL) (*transportFactory, []string) {
 	var warnings []string
-	f := &transportFactory{urlHost: urlHost, dialTimeout: 10 * time.Second}
+	urlHost := u.Host
+	f := &transportFactory{urlHost: urlHost, urlHostPort: urlHost, dialTimeout: 10 * time.Second}
+	if _, _, err := net.SplitHostPort(urlHost); err != nil {
+		port := "443"
+		if u.Scheme == "http" {
+			port = "80"
+		}
+		f.urlHostPort = net.JoinHostPort(urlHost, port)
+	}
 	if cfg.TestEndpoint != "" && cfg.TestEndpoint != hostOnly(urlHost) {
 		f.testEndpoint = cfg.TestEndpoint
 	}
@@ -70,7 +82,9 @@ func (f *transportFactory) newTransport(keepAlive bool) http.RoundTripper {
 		inner = d.DialContext
 	}
 	t.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
-		if f.testEndpoint != "" && hostOnly(addr) == hostOnly(f.urlHost) {
+		// Only rewrite dials to the origin itself; a proxy dial (which may
+		// share the origin's host) must be left alone.
+		if f.testEndpoint != "" && addr == f.urlHostPort {
 			_, port, err := net.SplitHostPort(addr)
 			if err != nil {
 				return nil, err
@@ -120,6 +134,65 @@ func closeIdle(rt http.RoundTripper) {
 	if t, ok := rt.(*http.Transport); ok {
 		t.CloseIdleConnections()
 	}
+}
+
+// explicitProxy reports the proxy the base transport would use for rawURL, or
+// nil. A custom RoundTripper cannot be inspected and yields nil.
+func (f *transportFactory) explicitProxy(rawURL string) *url.URL {
+	if f.base == nil || f.base.Proxy == nil {
+		return nil
+	}
+	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
+	if err != nil {
+		return nil
+	}
+	pu, err := f.base.Proxy(req)
+	if err != nil || pu == nil {
+		return nil
+	}
+	clean := *pu
+	clean.User = nil
+	return &clean
+}
+
+// sctExtensionOID is the X.509 extension carrying embedded Certificate
+// Transparency SCTs (RFC 6962 §3.3). Publicly trusted leaf certificates carry
+// it; certificates minted by a private or TLS-inspecting CA do not.
+var sctExtensionOID = []int{1, 3, 6, 1, 4, 1, 11129, 2, 4, 2}
+
+// inspectionVendors are issuer substrings of well-known TLS-inspection products.
+var inspectionVendors = []string{"zscaler", "netskope", "palo alto", "fortinet", "fortigate", "cisco umbrella", "blue coat", "bluecoat", "symantec", "check point", "mcafee", "forcepoint", "sophos", "websense"}
+
+// inspectChain reports TLS interception when the chain verified but the leaf
+// is not publicly trusted. It returns nil when verification was skipped
+// (InsecureSkipVerify) or the leaf carries SCTs.
+func inspectChain(cs tls.ConnectionState) *ProxyInfo {
+	if len(cs.VerifiedChains) == 0 || len(cs.PeerCertificates) == 0 {
+		return nil
+	}
+	if len(cs.SignedCertificateTimestamps) > 0 || hasSCTExtension(cs.PeerCertificates[0]) {
+		return nil
+	}
+	issuer := cs.PeerCertificates[0].Issuer.String()
+	info := &ProxyInfo{TLSInterception: true, Issuer: issuer}
+	lower := strings.ToLower(issuer)
+	for _, v := range inspectionVendors {
+		if strings.Contains(lower, v) {
+			info.Reason = fmt.Sprintf("certificate issued by TLS-inspection product (%s); measurements cover the client→proxy leg", issuer)
+			return info
+		}
+	}
+	info.Reason = fmt.Sprintf("certificate chain verified but the leaf has no Certificate Transparency SCTs, so it is not publicly trusted: a TLS-inspecting proxy or a private CA (%s) is in the path", issuer)
+	return info
+}
+
+func hasSCTExtension(c *x509.Certificate) bool {
+	for _, e := range c.Extensions {
+		if e.Id.Equal(sctExtensionOID) {
+			return true
+		}
+	}
+	return false
 }
 
 func checkStatus(resp *http.Response) error {

@@ -174,6 +174,16 @@ func printHuman(w io.Writer, r *netquality.Result) {
 		fmt.Fprintf(w, " %s", strings.Join(r.Target.ResolvedIPs, ","))
 	}
 	fmt.Fprintln(w)
+	if p := r.Target.Proxy; p != nil {
+		var parts []string
+		if p.Explicit {
+			parts = append(parts, "explicit "+p.URL)
+		}
+		if p.TLSInterception {
+			parts = append(parts, "TLS interception by "+p.Issuer)
+		}
+		fmt.Fprintf(w, "Proxy      %s (numbers cover the client→proxy leg)\n", strings.Join(parts, "; "))
+	}
 	if r.Idle != nil {
 		fmt.Fprintf(w, "Idle       %s median, %s p95, jitter %s (%d probes)\n",
 			ms(r.Idle.Median), ms(r.Idle.P95), ms(r.Idle.Jitter), r.Idle.Samples)

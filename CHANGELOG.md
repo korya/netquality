@@ -5,6 +5,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Proxy detection: `target.proxy` reports explicit proxies (from the
+  transport's proxy function) and TLS interception (verified chain without
+  Certificate Transparency SCTs), each with a warning. CLI prints a `Proxy`
+  line.
+
+### Fixed
+- `test_endpoint` dial override no longer rewrites dials to a proxy that
+  shares the origin's host.
+
 ## [0.1.1] - 2026-08-28
 
 ### Added

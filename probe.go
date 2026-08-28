@@ -30,7 +30,8 @@ const (
 
 // foreignProbe performs a GET of the small URL on a brand-new connection and
 // records per-stage timings. rt must not reuse connections.
-func foreignProbe(ctx context.Context, rt http.RoundTripper, url string, now func() time.Time) (LatencySample, error) {
+// observe, if non-nil, receives the TLS state of every successful handshake.
+func foreignProbe(ctx context.Context, rt http.RoundTripper, url string, now func() time.Time, observe func(tls.ConnectionState)) (LatencySample, error) {
 	pt := &probeTimes{}
 	start := now()
 	lock := func(f func()) { pt.mu.Lock(); defer pt.mu.Unlock(); f() }
@@ -65,6 +66,9 @@ func foreignProbe(ctx context.Context, rt http.RoundTripper, url string, now fun
 					pt.s.TLSRTTs = tlsRoundTrips(cs.Version)
 				}
 			})
+			if err == nil && observe != nil {
+				observe(cs)
+			}
 		},
 		GotConn:      func(info httptrace.GotConnInfo) { lock(func() { pt.reused = info.Reused }) },
 		WroteRequest: func(httptrace.WroteRequestInfo) { lock(func() { pt.wrote = now() }) },

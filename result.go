@@ -31,6 +31,28 @@ type ResolvedTarget struct {
 	// HTTPVersion is the protocol negotiated by load flows ("HTTP/2.0", "HTTP/1.1").
 	HTTPVersion string       `json:"http_version,omitempty"`
 	Config      ServerConfig `json:"config"`
+	// Proxy is set when the measured path involves a proxy: an explicit one
+	// from the transport's Proxy function, or TLS interception inferred from
+	// the certificate chain. Nil when nothing was detected. Numbers are still
+	// valid measurements, but of the client→proxy leg.
+	Proxy *ProxyInfo `json:"proxy,omitempty"`
+}
+
+// ProxyInfo describes a detected proxy. Explicit and TLSInterception may both
+// be set.
+type ProxyInfo struct {
+	// Explicit is true when the HTTP transport routed requests via a proxy.
+	Explicit bool `json:"explicit"`
+	// URL of the explicit proxy, credentials removed.
+	URL string `json:"url,omitempty"`
+	// TLSInterception is true when the server certificate chain verified but
+	// the leaf is not publicly trusted (no Certificate Transparency SCTs): a
+	// TLS-inspecting proxy or a private CA re-issued it.
+	TLSInterception bool `json:"tls_interception"`
+	// Issuer of the intercepted leaf certificate.
+	Issuer string `json:"issuer,omitempty"`
+	// Reason is a human-readable explanation of the detection.
+	Reason string `json:"reason,omitempty"`
 }
 
 // TruncationReason says why a phase ended before stabilising.

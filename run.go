@@ -2,6 +2,7 @@ package netquality
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -31,12 +32,36 @@ func RunWithEvents(ctx context.Context, t Target, o Options, sink func(Event)) (
 }
 
 type runner struct {
-	opts    Options
-	sink    func(Event)
-	factory *transportFactory
-	cfg     *ServerConfig
-	res     *Result
-	mu      sync.Mutex // guards res.Warnings
+	opts         Options
+	sink         func(Event)
+	factory      *transportFactory
+	cfg          *ServerConfig
+	res          *Result
+	mu           sync.Mutex // guards res.Warnings and res.Target.Proxy
+	chainChecked bool       // first verified TLS handshake decides interception
+}
+
+// observeTLS inspects the first successful handshake for TLS interception.
+func (r *runner) observeTLS(cs tls.ConnectionState) {
+	r.mu.Lock()
+	if r.chainChecked {
+		r.mu.Unlock()
+		return
+	}
+	r.chainChecked = true
+	info := inspectChain(cs)
+	if info == nil {
+		r.mu.Unlock()
+		return
+	}
+	if p := r.res.Target.Proxy; p != nil {
+		p.TLSInterception, p.Issuer = true, info.Issuer
+		p.Reason += "; " + info.Reason
+	} else {
+		r.res.Target.Proxy = info
+	}
+	r.mu.Unlock()
+	r.warn("TLS interception: %s", info.Reason)
 }
 
 func (r *runner) emit(e Event) {
@@ -72,9 +97,19 @@ func (r *runner) run(ctx context.Context, t Target) (*Result, error) {
 	r.res.Target.Config = *cfg
 
 	var fwarn []string
-	r.factory, fwarn = newTransportFactory(r.opts.HTTPClient, cfg, u.Host)
+	r.factory, fwarn = newTransportFactory(r.opts.HTTPClient, cfg, u)
 	for _, w := range fwarn {
 		r.warn("%s", w)
+	}
+	if pu := r.factory.explicitProxy(cfg.SmallDownloadURL); pu != nil {
+		r.mu.Lock()
+		r.res.Target.Proxy = &ProxyInfo{Explicit: true, URL: pu.String(),
+			Reason: fmt.Sprintf("requests routed via proxy %s; latency and throughput measure the client→proxy leg", pu)}
+		r.mu.Unlock()
+		r.warn("explicit proxy %s: latency and throughput measure the client→proxy leg", pu)
+		if r.factory.testEndpoint != "" {
+			r.warn("test_endpoint %q is ignored because a proxy dials the origin", cfg.TestEndpoint)
+		}
 	}
 
 	if r.opts.IdleProbes > 0 {
@@ -173,7 +208,7 @@ func (r *runner) idle(ctx context.Context) (*LatencyStats, error) {
 		if ctx.Err() != nil {
 			break
 		}
-		s, err := foreignProbe(ctx, rt, r.cfg.SmallDownloadURL, r.opts.clock.Now)
+		s, err := foreignProbe(ctx, rt, r.cfg.SmallDownloadURL, r.opts.clock.Now, r.observeTLS)
 		if err != nil {
 			lastErr = err
 			continue
@@ -344,7 +379,7 @@ func (r *runner) loadPhase(ctx context.Context, dir Directions) (*DirectionResul
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			err := runFlow(pctx, f, dir, p.url, p.bytes)
+			err := runFlow(pctx, f, dir, p.url, p.bytes, r.observeTLS)
 			if err != nil && !errors.Is(err, errFlowDone) {
 				errMu.Lock()
 				p.flowErrs++
@@ -551,7 +586,7 @@ func (r *runner) probeLoop(ctx context.Context, p *phaseState) {
 				s, err = selfProbe(ctx, f.rt, r.cfg.SmallDownloadURL, r.opts.clock.Now)
 			} else {
 				p.bytes.add(foreignProbeBytes)
-				s, err = foreignProbe(ctx, foreignRT, r.cfg.SmallDownloadURL, r.opts.clock.Now)
+				s, err = foreignProbe(ctx, foreignRT, r.cfg.SmallDownloadURL, r.opts.clock.Now, r.observeTLS)
 			}
 			if err != nil {
 				if ctx.Err() == nil {

@@ -76,12 +76,12 @@ var errFlowDone = errors.New("flow done")
 // runFlow drives one load-generating request until ctx is done. A response
 // body that ends cleanly (finite server object) is re-requested on the same
 // transport. Any other failure is returned.
-func runFlow(ctx context.Context, f *flow, dir Directions, url string, c *byteCounter) error {
+func runFlow(ctx context.Context, f *flow, dir Directions, url string, c *byteCounter, observe func(tls.ConnectionState)) error {
 	for {
 		if ctx.Err() != nil {
 			return errFlowDone
 		}
-		err := oneRequest(ctx, f, dir, url, c)
+		err := oneRequest(ctx, f, dir, url, c, observe)
 		if ctx.Err() != nil {
 			return errFlowDone
 		}
@@ -91,7 +91,7 @@ func runFlow(ctx context.Context, f *flow, dir Directions, url string, c *byteCo
 	}
 }
 
-func oneRequest(ctx context.Context, f *flow, dir Directions, url string, c *byteCounter) error {
+func oneRequest(ctx context.Context, f *flow, dir Directions, url string, c *byteCounter, observe func(tls.ConnectionState)) error {
 	var req *http.Request
 	var err error
 	// Uploads only see their response after the body ends, so learn the
@@ -104,6 +104,9 @@ func oneRequest(ctx context.Context, f *flow, dir Directions, url string, c *byt
 					proto = "HTTP/2.0"
 				}
 				f.proto.Store(&proto)
+				if observe != nil {
+					observe(cs)
+				}
 			}
 		},
 		GotConn: func(httptrace.GotConnInfo) { f.ready.Store(true) },

@@ -109,6 +109,30 @@ prefix when behind a load balancer, `--test-endpoint` advertises a specific
 host. The server needs HTTP/2 end to end and must not compress or redirect.
 It is correct, not hardened: put it behind something that rate-limits.
 
+## Proxies
+
+Corporate laptops often sit behind proxies, in which case the test measures
+the laptop→proxy leg, not the path to the server. The result says so rather
+than reporting plausible-but-wrong numbers:
+
+- **Explicit proxy** (`HTTPS_PROXY`, PAC, or `Transport.Proxy` on the client
+  you pass in): `target.proxy.explicit=true` with the proxy `url`
+  (credentials stripped). HTTP/2 still works through CONNECT tunnels.
+  `test_endpoint` cannot be honoured, and a warning says so.
+- **TLS interception** (Zscaler, Netskope, and similar): the certificate chain
+  verifies against the corporate root, but the leaf carries no Certificate
+  Transparency SCTs, which every publicly trusted certificate has had since
+  2018. `target.proxy.tls_interception=true` with the `issuer` and a `reason`.
+  A self-hosted `nqserver` behind a private CA triggers the same flag, since
+  the trust situation is identical; the wording says "proxy or private CA".
+  `--insecure` skips verification and therefore never triggers it.
+
+Both cases add a warning. Confidence scores are unaffected: the algorithm
+converged on a real measurement, just of a shorter path. Not detected: proxies
+that re-issue publicly trusted certificates (not possible without a CA
+compromise) and transparent TCP-level proxies that pass TLS through untouched
+(those are not altering the measurement).
+
 ## Safety limits
 
 | Limit | Default | Effect |

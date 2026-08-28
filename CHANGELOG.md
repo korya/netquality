@@ -5,6 +5,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Internal: `internal/linksim`, a fluid link model, and an algorithm
+  scenario matrix with honesty/budget/convergence/accuracy oracles and a
+  `knownFailing` ledger of what the current algorithm cannot yet do.
+
 ### Changed
 - Internal: the per-interval measurement logic now lives in a pure,
   clock-free `internal/engine` package driven by observations, so it can be

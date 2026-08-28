@@ -121,6 +121,24 @@ directory relative to the repo root; `.` is the library.
 |---|---|---|---|
 | Public servers | Apple and Cloudflare produce idle/RPM/throughput without proxy flags | . | TestLive |
 
+## Algorithm scenarios (`internal/engine`, `internal/linksim`)
+
+The engine runs against a fluid link model instead of sockets. Scenarios are
+judged by oracles: honesty (never `high` confidence when >10 % off), budget
+(bytes/time never exceeded), convergence and accuracy. Scenarios the current
+algorithm fails are listed in `knownFailing` with a cause; the test fails if
+an unlisted scenario regresses **or if a listed one starts passing**, so the
+ledger stays exact.
+
+| Feature | Scenario | Package | Test |
+|---|---|---|---|
+| Algorithm | 5 Mbps–10 Gbps × RTT 10/50/150 ms, bufferbloat, CDN per-flow cap, shaper burst, upload send buffer, tick jitter, mid-run capacity change, unlimited bytes | internal/engine | TestAlgorithmScenarios |
+| Simulator | Delivers exactly capacity, never more | internal/linksim | TestModelDeliversCapacity |
+| Simulator | Queue adds queue/capacity of latency | internal/linksim | TestModelQueueAddsLatency |
+| Simulator | Token bucket bursts then sustains capacity | internal/linksim | TestModelShaperSustainsCapacity |
+| Simulator | Send-buffer credit per flow | internal/linksim | TestModelSendBufferCredit |
+| Simulator | Capacity change, byte/duration budgets, determinism | internal/linksim | TestModelCapacityChangeAndBudgets |
+
 ### Not testable offline
 
 Stability convergence under real bufferbloat, PTC probe throttling on slow

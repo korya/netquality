@@ -228,3 +228,29 @@ func TestRepeatedRunsAreIndependent(t *testing.T) {
 		}
 	}
 }
+
+// TestProbeCostIsNotGoodput pins the split between the two byte totals: the
+// byte cap counts the draft's fixed per-probe estimate (LIM-2), goodput counts
+// only what the load flows moved (LOAD-4). Merging them let a phase measure
+// its own probe traffic as capacity.
+func TestProbeCostIsNotGoodput(t *testing.T) {
+	var tripped atomic.Bool
+	c := &byteCounter{limit: 10_000, onLimit: func() { tripped.Store(true) }}
+	c.addProbe(foreignProbeBytes)
+	c.addProbe(selfProbeBytes)
+	if c.get() != 6000 || c.payloadBytes() != 0 {
+		t.Errorf("probe cost: total=%d payload=%d, want 6000/0", c.get(), c.payloadBytes())
+	}
+	if tripped.Load() {
+		t.Error("cap tripped early")
+	}
+	c.add(3000)
+	if c.get() != 9000 || c.payloadBytes() != 3000 {
+		t.Errorf("payload: total=%d payload=%d, want 9000/3000", c.get(), c.payloadBytes())
+	}
+	// The cap must fire on the combined total, probe cost included.
+	c.addProbe(foreignProbeBytes)
+	if !tripped.Load() {
+		t.Error("byte cap must count probe cost")
+	}
+}

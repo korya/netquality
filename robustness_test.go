@@ -90,13 +90,23 @@ func TestStalledLargeBody(t *testing.T) {
 		t.Errorf("stalled body must end at MaxDuration, took %v", el)
 	}
 	d := res.Download
-	if !d.Truncated || d.Reason != ReasonDurationCap || d.ThroughputBPS > 1e6 || d.ThroughputConfidence == ConfidenceHigh {
+	if !d.Truncated || d.Reason != ReasonDurationCap || d.ThroughputConfidence == ConfidenceHigh {
 		t.Errorf("stalled download must be honest: %+v", d)
 	}
-	// Probes keep running while the body is stalled (counted over the whole
-	// phase: the final window alone may be empty on a slow runner).
-	if foreignProbes.Load() == 0 {
-		t.Error("foreign probes still run while the body is stalled")
+	// Not one payload byte arrived, so every throughput figure must be zero.
+	// Probe cost is charged to MaxBytes but is never goodput; counting it made
+	// a stalled link read as ~500 kbps and, via ProbeGap, throttled probing to
+	// one probe per second.
+	if d.ThroughputBPS != 0 || d.MeanThroughputBPS != 0 || d.PeakThroughputBPS != 0 {
+		t.Errorf("stalled download must report zero throughput, not its own probe traffic: %+v", d)
+	}
+	if d.Bytes == 0 {
+		t.Error("probe cost must still be charged to the phase's byte total")
+	}
+	// Probes keep running while the body is stalled.
+	if foreignProbes.Load() < 5 || d.Loaded.Foreign == nil {
+		t.Errorf("foreign probes must keep running while the body is stalled: %d probes, loaded=%+v",
+			foreignProbes.Load(), d.Loaded.Foreign)
 	}
 }
 

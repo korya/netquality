@@ -391,12 +391,11 @@ loop:
 				elapsed = sp.Interval
 			}
 			lastTick = now
-			cur := p.bytes.get()
 			f, sl := p.take()
-			d := p.eng.Interval(engine.Observation{Elapsed: elapsed, Bytes: cur, Flows: p.flowCount(), Foreign: f, Self: sl})
+			d := p.eng.Interval(engine.Observation{Elapsed: elapsed, Bytes: p.bytes.payloadBytes(), Flows: p.flowCount(), Foreign: f, Self: sl})
 			dr.Intervals = d.Interval
 			ev := Event{Kind: EventInterval, Phase: dir.String(), Direction: dir.String(),
-				Interval: d.Interval, Flows: p.flowCount(), ThroughputBPS: d.ThroughputBPS, Bytes: cur, RPM: d.RPM}
+				Interval: d.Interval, Flows: p.flowCount(), ThroughputBPS: d.ThroughputBPS, Bytes: p.bytes.get(), RPM: d.RPM}
 			r.emit(ev)
 			if d.Stop {
 				r.opts.Logger.Info("responsiveness stable", "dir", dir.String(), "rpm", d.RPM)
@@ -431,7 +430,7 @@ loop:
 	dr.ThroughputBPS = sum.ThroughputBPS
 	dr.PeakThroughputBPS = sum.PeakThroughputBPS
 	if dr.Duration > 0 {
-		dr.MeanThroughputBPS = float64(dr.Bytes) * 8 / dr.Duration.Seconds()
+		dr.MeanThroughputBPS = float64(p.bytes.payloadBytes()) * 8 / dr.Duration.Seconds()
 	}
 	if dr.Intervals == 0 {
 		dr.ThroughputBPS = dr.MeanThroughputBPS
@@ -516,10 +515,10 @@ func (r *runner) probeLoop(ctx context.Context, p *phaseState) {
 				if pr := f.proto.Load(); pr == nil || *pr != "HTTP/2.0" {
 					return // cannot multiplex on HTTP/1.1
 				}
-				p.bytes.add(selfProbeBytes)
+				p.bytes.addProbe(selfProbeBytes)
 				s, err = selfProbe(ctx, f.rt, r.cfg.SmallDownloadURL, r.opts.Header, r.opts.clock.Now)
 			} else {
-				p.bytes.add(foreignProbeBytes)
+				p.bytes.addProbe(foreignProbeBytes)
 				s, err = foreignProbe(ctx, foreignRT, r.cfg.SmallDownloadURL, r.opts.Header, r.opts.clock.Now, r.observeTLS)
 			}
 			if err != nil {

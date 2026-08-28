@@ -51,7 +51,8 @@ directory relative to the repo root; `.` is the library.
 | Flow error | Failure after intervals truncates with `flow_error`, keeps data | . | TestFlowErrorAfterIntervalsKeepsResult |
 | Flow error | Upload rejected mid-stream (413): download intact, upload flagged, error carries the status, no stall | . | TestUploadRejectedMidStream |
 | Flow error | Redirect on a test URL fails the flow with its status | . | TestRedirectOnTestURLIsAFlowError |
-| Stalled server | Headers without body: ends at MaxDuration with duration_cap and honest ~0 throughput | . | TestStalledLargeBody |
+| Stalled server | Headers without body: ends at MaxDuration with duration_cap, zero throughput, probes still running | . | TestStalledLargeBody |
+| Byte accounting | Probe cost counts against the byte cap but never as goodput | . | TestProbeCostIsNotGoodput |
 | Dead host | Unresolvable test host fails fast with the host in the error | . | TestUnresolvableTestHostFailsFast |
 | HTTP/1.1 fallback | Upload direction: no self probes, foreign RPM, warning | . | TestHTTP11FallbackUpload |
 | Full ramp | Reaches exactly MaxFlows (16) and never exceeds it | . | TestFullRampToMaxFlows |

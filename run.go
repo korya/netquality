@@ -25,7 +25,9 @@ func Run(ctx context.Context, t Target, o Options) (*Result, error) {
 	return RunWithEvents(ctx, t, o, nil)
 }
 
-// RunWithEvents is Run with a progress sink. sink may be nil.
+// RunWithEvents is Run with a progress sink. sink may be nil; otherwise it
+// must be safe for concurrent use, because flow and probe goroutines call it
+// (see Event).
 func RunWithEvents(ctx context.Context, t Target, o Options, sink func(Event)) (*Result, error) {
 	r := &runner{opts: o.withDefaults(), sink: sink}
 	return r.run(ctx, t)

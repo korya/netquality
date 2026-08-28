@@ -5,6 +5,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-08-28
+
+### Added
+- Release workflow: tags `vX.Y.Z` build `nq`/`nqserver` for all six
+  platforms, publish a GitHub release with the matching changelog section,
+  and trigger pkg.go.dev indexing.
+- CI and Go Reference badges; "Releasing" section in the README.
+
+### Fixed
+- Data race in the loopback integration test's event sink (library unchanged).
+
 ## [0.1.0] - 2026-08-27
 
 ### Added
@@ -22,5 +33,6 @@ All notable changes to this project are documented here. The format follows
 - Unit, loopback integration and opt-in live (`NQ_LIVE=1`) tests; CI on
   Linux/macOS/Windows plus a six-target cross-compile matrix.
 
-[Unreleased]: https://github.com/korya/netquality/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/korya/netquality/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/korya/netquality/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/korya/netquality/releases/tag/v0.1.0

@@ -465,7 +465,7 @@ loop:
 
 	switch dr.Reason {
 	case ReasonBytesCap:
-		r.warn("%s: byte cap (%d bytes) hit before stabilisation; result truncated", dir, r.opts.MaxBytes)
+		r.warn("%s: byte cap MaxBytes=%d hit before stabilisation; result truncated", dir, r.opts.MaxBytes)
 	case ReasonDurationCap:
 		r.warn("%s: duration cap (%s) hit before stabilisation; result truncated", dir, r.opts.MaxDuration)
 	case ReasonFlowError:

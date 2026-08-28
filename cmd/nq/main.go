@@ -45,7 +45,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		downloadOnly = fs.Bool("download-only", false, "run only the download phase")
 		uploadOnly   = fs.Bool("upload-only", false, "run only the upload phase")
 		maxDuration  = fs.Duration("max-duration", netquality.DefaultMaxDuration, "per-direction time cap")
-		maxBytes     = fs.String("max-bytes", "250MB", "per-direction byte cap (e.g. 100MB, 1GB)")
+		maxBytes     = fs.String("max-bytes", "", "per-direction byte cap for metered links (e.g. 100MB, 1GB); omitted = no cap, time bounds the run")
 		maxFlows     = fs.Int("max-flows", netquality.DefaultMaxFlows, "maximum concurrent load connections")
 		idleProbes   = fs.Int("idle-probes", netquality.DefaultIdleProbes, "number of idle latency probes")
 		interval     = fs.Duration("interval", 0, "stability interval (default 1s; draft says 5s)")
@@ -90,10 +90,13 @@ func run(args []string, stdout, stderr io.Writer) int {
 			return exitUsage
 		}
 	}
-	mb, err := parseBytes(*maxBytes)
-	if err != nil {
-		fmt.Fprintf(stderr, "nq: --max-bytes: %v\n", err)
-		return exitUsage
+	var mb int64
+	if *maxBytes != "" {
+		var err error
+		if mb, err = parseBytes(*maxBytes); err != nil {
+			fmt.Fprintf(stderr, "nq: --max-bytes: %v\n", err)
+			return exitUsage
+		}
 	}
 	opts := netquality.Options{
 		MaxDuration: *maxDuration,

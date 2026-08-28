@@ -42,9 +42,13 @@ func DefaultStabilityParams() StabilityParams { return engine.DefaultStabilityPa
 // Default safety limits and probe counts.
 const (
 	DefaultMaxDuration = 12 * time.Second
-	DefaultMaxBytes    = 250 << 20 // 250 MiB
-	DefaultMaxFlows    = 16
-	DefaultIdleProbes  = 5
+	// DefaultMaxBytes is 0: no byte cap by default. Time is the budget —
+	// cost is at most rate × MaxDuration per direction — so a confident
+	// result is reachable at any link speed. Callers on metered links set
+	// MaxBytes explicitly.
+	DefaultMaxBytes   = 0
+	DefaultMaxFlows   = 16
+	DefaultIdleProbes = 5
 	// DefaultConfigTimeout bounds config discovery, which happens before the
 	// per-direction budgets apply.
 	DefaultConfigTimeout = 10 * time.Second
@@ -55,8 +59,10 @@ type Options struct {
 	// MaxDuration bounds each direction's load phase (default 12s). A phase that
 	// has not stabilised when the bound hits is reported as truncated.
 	MaxDuration time.Duration
-	// MaxBytes bounds the bytes moved by each direction's load phase, probes
-	// included (default 250 MiB). Hitting it truncates the phase.
+	// MaxBytes, if > 0, bounds the bytes moved by each direction's load
+	// phase, probes included; hitting it truncates the phase with
+	// reason=bytes_cap. 0 (the default) means no byte cap: MaxDuration alone
+	// bounds the run. Set it on metered links.
 	MaxBytes int64
 	// MaxFlows caps the number of concurrent load-generating connections
 	// (default 16, draft MNP).
@@ -90,8 +96,8 @@ func (o Options) withDefaults() Options {
 	if o.MaxDuration <= 0 {
 		o.MaxDuration = DefaultMaxDuration
 	}
-	if o.MaxBytes <= 0 {
-		o.MaxBytes = DefaultMaxBytes
+	if o.MaxBytes < 0 {
+		o.MaxBytes = 0
 	}
 	if o.MaxFlows <= 0 {
 		o.MaxFlows = DefaultMaxFlows

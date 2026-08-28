@@ -7,8 +7,10 @@ Feature specs cite them by ID.
 ---
 
 ### INV-1: Bounded before start
-Every run has a finite duration, byte, and connection budget fixed before the
-first packet is sent. No code path may retry in a way that multiplies traffic.
+Every run has a finite duration and connection budget fixed before the first
+packet is sent, and a byte budget whenever the caller sets one. Cost is
+therefore at most link rate × duration per direction. No code path may retry
+in a way that multiplies traffic.
 
 ### INV-2: No traffic besides the test
 The library and CLI send nothing over the network except the config fetch,

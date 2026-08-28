@@ -8,8 +8,9 @@ Cloudflare's, or your own server.
 - Standard library only, no CGO, cross-compiles for Windows/macOS/Linux on
   amd64 and arm64. Requires Go 1.26+ (older lines no longer receive TLS/HTTP
   security fixes).
-- Every run is bounded by **time, bytes and connection count** before it
-  starts, and every number in the result says how it was obtained.
+- Every run is bounded by **time and connection count** before it starts —
+  and by bytes too when you say the link is metered — and every number in
+  the result says how it was obtained.
 - Sends nothing over the network except the test itself.
 
 ```
@@ -57,8 +58,8 @@ Cost       370.5 MB moved in 21.0s
 import "github.com/korya/netquality"
 
 res, err := netquality.Run(ctx, netquality.Cloudflare, netquality.Options{
-    MaxDuration: 10 * time.Second, // per direction
-    MaxBytes:    100 << 20,        // per direction
+    MaxDuration: 10 * time.Second, // per direction; the budget
+    MaxBytes:    100 << 20,        // optional: only on metered links
     MaxFlows:    8,
 })
 if err != nil { /* discovery failed, or ctx cancelled (res is then partial) */ }
@@ -93,7 +94,8 @@ nq --target apple
 nq --well-known nq.example.com:8443 [--insecure]
 nq --config-url https://host/path/config
 nq --download-only | --upload-only
-nq --max-duration 8s --max-bytes 100MB --max-flows 8
+nq --max-duration 8s --max-flows 8          # time is the budget
+nq --max-bytes 100MB                         # metered link: add a byte cap
 nq --json                            # Result as one JSON document on stdout
 nq --events                          # JSON-lines progress on stderr
 nq version
@@ -205,8 +207,8 @@ compromise) and transparent TCP-level proxies that pass TLS through untouched
 
 | Limit | Default | Effect |
 |---|---|---|
-| `MaxDuration` | 12 s per direction | phase ends; if not yet stable → `truncated`, `reason=duration_cap` |
-| `MaxBytes` | 250 MiB per direction (probes included) | phase ends → `reason=bytes_cap` |
+| `MaxDuration` | 12 s per direction | the budget: phase ends; if not yet stable → `truncated`, `reason=duration_cap`. Cost ≤ rate × 12 s |
+| `MaxBytes` | **none** (opt-in) | set on metered links; phase ends → `reason=bytes_cap` |
 | `MaxFlows` | 16 | never more concurrent load connections |
 | `ctx` cancellation | – | all flows stop within ~200 ms; partial result, `cancelled=true` |
 
@@ -218,7 +220,8 @@ telemetry.
 | Item | Draft | Here | Why |
 |---|---|---|---|
 | Interval (ID) | 5 s | **1 s** | 4 intervals must complete before stability can be declared; with the 12 s per-direction budget a 5 s interval could never stabilise. Earlier drafts and shipping tools use 1 s. Configurable via `Stability.Interval`. |
-| Time budget | "implementations may" limit | mandatory `MaxDuration` + `MaxBytes` | Runs on metered laptops. |
+| Time budget | "implementations may" limit | mandatory `MaxDuration`; `MaxBytes` opt-in | Runs on laptops; time bounds cost proportionally to the link. |
+| Byte cap default | (handoff spec: 250 MB) | none | A fixed byte cap starves fast links of the intervals a confident RPM needs (≈ 8 × rate); the caller knows which networks are metered, the library cannot. |
 | Flow error | abort the test | abort the **phase**, report `reason=flow_error`, keep other results | Partial data with a flag beats none. |
 | Self probes on HTTP/1.1 | use TCP RTT estimate | omitted; RPM from foreign probes only, warning recorded | TCP_INFO is not portable in pure Go. |
 | Flow addition | every interval | every interval until `MaxFlows` | Same, with the cap. |

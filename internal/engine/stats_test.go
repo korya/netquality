@@ -38,8 +38,8 @@ func TestStatsOf(t *testing.T) {
 	if st.Jitter != ms(10) { // mean |x-25| = (15+5+5+15)/4 = 10
 		t.Errorf("jitter = %v", st.Jitter)
 	}
-	if st.P95 != ms(40) {
-		t.Errorf("p95 = %v", st.P95)
+	if st.P80 != 0 || st.P90 != 0 || st.P95 != 0 || st.P99 != 0 {
+		t.Errorf("4 samples support no percentile: %+v", st)
 	}
 	if z := statsOf(nil); z.Samples != 0 {
 		t.Error("empty")

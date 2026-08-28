@@ -55,6 +55,10 @@ func TestHumanOutput(t *testing.T) {
 			t.Errorf("missing %q in:\n%s", want, s)
 		}
 	}
+	// Two idle probes support no percentile: the tail shows the max, never a fake p95.
+	if idleLine := lineWith(s, "Idle"); !strings.Contains(idleLine, " max,") || strings.Contains(idleLine, "p95") {
+		t.Errorf("idle tail at 2 probes: %q", idleLine)
+	}
 	if !strings.Contains(errb.String(), "== download") || !strings.Contains(errb.String(), "flows=") {
 		t.Errorf("progress on stderr missing: %q", errb.String())
 	}
@@ -208,4 +212,13 @@ func TestEdgeFlags(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &res); err != nil || res.Idle == nil || res.Idle.Samples != netquality.DefaultIdleProbes || res.Download.Flows == 0 {
 		t.Errorf("zero flags must mean defaults: %v idle=%+v flows=%d", err, res.Idle, res.Download.Flows)
 	}
+}
+
+func lineWith(s, prefix string) string {
+	for _, l := range strings.Split(s, "\n") {
+		if strings.HasPrefix(l, prefix) {
+			return l
+		}
+	}
+	return ""
 }

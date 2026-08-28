@@ -202,8 +202,8 @@ func printHuman(w io.Writer, r *netquality.Result) {
 		fmt.Fprintf(w, "Proxy      %s (numbers cover the client→proxy leg)\n", strings.Join(parts, "; "))
 	}
 	if r.Idle != nil {
-		fmt.Fprintf(w, "Idle       %s median, %s p95, jitter %s (%d probes)\n",
-			ms(r.Idle.Median), ms(r.Idle.P95), ms(r.Idle.Jitter), r.Idle.Samples)
+		fmt.Fprintf(w, "Idle       %s median, %s, jitter %s (%d probes)\n",
+			ms(r.Idle.Median), tail(*r.Idle), ms(r.Idle.Jitter), r.Idle.Samples)
 	} else {
 		fmt.Fprintln(w, "Idle       not measured")
 	}
@@ -231,7 +231,7 @@ func printDir(w io.Writer, name string, d *netquality.DirectionResult) {
 	}
 	fmt.Fprintf(w, "%-10s %8.1f Mbps  %5.0f RPM", name, d.ThroughputBPS/1e6, d.RPM)
 	if d.Loaded.Combined != nil {
-		fmt.Fprintf(w, "  loaded %s median, %s p95", ms(d.Loaded.Combined.Median), ms(d.Loaded.Combined.P95))
+		fmt.Fprintf(w, "  loaded %s median, %s", ms(d.Loaded.Combined.Median), tail(*d.Loaded.Combined))
 	}
 	fmt.Fprintf(w, "  [%d flows, %s/%s confidence", d.Flows, d.ThroughputConfidence, d.ResponsivenessConfidence)
 	if d.Truncated {
@@ -241,6 +241,15 @@ func printDir(w io.Writer, name string, d *netquality.DirectionResult) {
 }
 
 func ms(d time.Duration) string { return fmt.Sprintf("%.1fms", float64(d)/float64(time.Millisecond)) }
+
+// tail renders the highest percentile the sample count supports, or the max
+// when there are too few samples for any percentile.
+func tail(st netquality.LatencyStats) string {
+	if p, v := st.HighestPercentile(); p > 0 {
+		return fmt.Sprintf("%s p%.0f", ms(v), p)
+	}
+	return ms(st.Max) + " max"
+}
 
 func humanBytes(n int64) string {
 	const unit = 1000

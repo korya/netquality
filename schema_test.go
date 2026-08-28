@@ -105,6 +105,9 @@ func TestStoredResultDocumentParses(t *testing.T) {
 	if err := json.Unmarshal(data, &res); err != nil {
 		t.Fatalf("stored document no longer parses: %v", err)
 	}
+	if res.Idle.P80 != 0 || res.Idle.P95 != 0 || res.Download.Loaded.Foreign.P95 == 0 {
+		t.Errorf("percentile presence: idle(2 samples)=%+v foreign(182)=%+v", res.Idle, res.Download.Loaded.Foreign)
+	}
 	if res.SchemaVersion != 1 || res.Target.Host != "h3.speed.cloudflare.com" || res.Download == nil || res.Download.RPM == 0 ||
 		res.Download.Reason != ReasonBytesCap || res.Idle == nil || res.Idle.Stages == nil || len(res.Target.LocalIPs) != 1 {
 		t.Errorf("values lost: %+v", res)

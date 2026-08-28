@@ -12,7 +12,10 @@ download.loaded.combined.max_ns int64
 download.loaded.combined.mean_ns int64
 download.loaded.combined.median_ns int64
 download.loaded.combined.min_ns int64
+download.loaded.combined.p80_ns int64
+download.loaded.combined.p90_ns int64
 download.loaded.combined.p95_ns int64
+download.loaded.combined.p99_ns int64
 download.loaded.combined.samples int
 download.loaded.combined.stages.connect_ns int64
 download.loaded.combined.stages.dns_ns int64
@@ -24,7 +27,10 @@ download.loaded.foreign.max_ns int64
 download.loaded.foreign.mean_ns int64
 download.loaded.foreign.median_ns int64
 download.loaded.foreign.min_ns int64
+download.loaded.foreign.p80_ns int64
+download.loaded.foreign.p90_ns int64
 download.loaded.foreign.p95_ns int64
+download.loaded.foreign.p99_ns int64
 download.loaded.foreign.samples int
 download.loaded.foreign.stages.connect_ns int64
 download.loaded.foreign.stages.dns_ns int64
@@ -36,7 +42,10 @@ download.loaded.self.max_ns int64
 download.loaded.self.mean_ns int64
 download.loaded.self.median_ns int64
 download.loaded.self.min_ns int64
+download.loaded.self.p80_ns int64
+download.loaded.self.p90_ns int64
 download.loaded.self.p95_ns int64
+download.loaded.self.p99_ns int64
 download.loaded.self.samples int
 download.loaded.self.stages.connect_ns int64
 download.loaded.self.stages.dns_ns int64
@@ -60,7 +69,10 @@ idle.max_ns int64
 idle.mean_ns int64
 idle.median_ns int64
 idle.min_ns int64
+idle.p80_ns int64
+idle.p90_ns int64
 idle.p95_ns int64
+idle.p99_ns int64
 idle.samples int
 idle.stages.connect_ns int64
 idle.stages.dns_ns int64
@@ -98,7 +110,10 @@ upload.loaded.combined.max_ns int64
 upload.loaded.combined.mean_ns int64
 upload.loaded.combined.median_ns int64
 upload.loaded.combined.min_ns int64
+upload.loaded.combined.p80_ns int64
+upload.loaded.combined.p90_ns int64
 upload.loaded.combined.p95_ns int64
+upload.loaded.combined.p99_ns int64
 upload.loaded.combined.samples int
 upload.loaded.combined.stages.connect_ns int64
 upload.loaded.combined.stages.dns_ns int64
@@ -110,7 +125,10 @@ upload.loaded.foreign.max_ns int64
 upload.loaded.foreign.mean_ns int64
 upload.loaded.foreign.median_ns int64
 upload.loaded.foreign.min_ns int64
+upload.loaded.foreign.p80_ns int64
+upload.loaded.foreign.p90_ns int64
 upload.loaded.foreign.p95_ns int64
+upload.loaded.foreign.p99_ns int64
 upload.loaded.foreign.samples int
 upload.loaded.foreign.stages.connect_ns int64
 upload.loaded.foreign.stages.dns_ns int64
@@ -122,7 +140,10 @@ upload.loaded.self.max_ns int64
 upload.loaded.self.mean_ns int64
 upload.loaded.self.median_ns int64
 upload.loaded.self.min_ns int64
+upload.loaded.self.p80_ns int64
+upload.loaded.self.p90_ns int64
 upload.loaded.self.p95_ns int64
+upload.loaded.self.p99_ns int64
 upload.loaded.self.samples int
 upload.loaded.self.stages.connect_ns int64
 upload.loaded.self.stages.dns_ns int64

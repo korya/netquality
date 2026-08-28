@@ -5,6 +5,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- Latency percentiles are honest about sample size: `p95_ns` is present only
+  from 20 samples, and `p80_ns` (from 5), `p90_ns` (from 10) and `p99_ns`
+  (from 100) are added. Previously `p95_ns` of the five idle probes was
+  always the maximum (#4). The CLI prints the highest percentile available.
+
 ### Added
 - `schema_version` (1) as the first field of `Result`, bumped only when a
   field is renamed, removed, retyped, or changes meaning (#2).

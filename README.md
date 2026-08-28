@@ -15,9 +15,9 @@ Cloudflare's, or your own server.
 ```
 $ nq --target apple
 Target     mensura.cdn-apple.com (HTTP/2.0) 17.253.24.71
-Idle       102.2ms median, 191.8ms p95, jitter 32.5ms (5 probes)
-Download      178.3 Mbps    365 RPM  loaded 185.2ms median, 421.6ms p95  [8 flows, high/high confidence]
-Upload        125.9 Mbps    311 RPM  loaded 160.7ms median, 399.6ms p95  [13 flows, medium/low confidence, TRUNCATED: duration_cap]
+Idle       102.2ms median, 131.8ms p80, jitter 32.5ms (5 probes)
+Download      178.3 Mbps    365 RPM  loaded 185.2ms median, 512.6ms p99  [8 flows, high/high confidence]
+Upload        125.9 Mbps    311 RPM  loaded 160.7ms median, 471.0ms p99  [13 flows, medium/low confidence, TRUNCATED: duration_cap]
 Cost       370.5 MB moved in 21.0s
 ```
 
@@ -45,7 +45,10 @@ Cost       370.5 MB moved in 21.0s
    where `TM` is the single-sided trimmed mean at the 95th percentile over the
    last four intervals. Roughly: < 300 RPM poor, > 1000 good, > 6000 excellent.
 5. **Jitter** – mean absolute deviation of the samples from their mean,
-   reported for idle and loaded sets.
+   reported for idle and loaded sets. Percentiles (`p80`/`p90`/`p95`/`p99`)
+   appear only when there are enough samples for them to differ from the
+   maximum (5/10/20/100 under nearest rank), so the default five idle probes
+   yield `p80`, never a fake `p95`.
 6. **Cost** – bytes moved and wall time per phase.
 
 ## Library

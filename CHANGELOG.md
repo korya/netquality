@@ -5,6 +5,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- Internal: the per-interval measurement logic now lives in a pure,
+  clock-free `internal/engine` package driven by observations, so it can be
+  tested against recorded and simulated links. No behaviour or JSON change;
+  public latency types are aliases of the engine's.
+
 ## [0.2.1] - 2026-08-28
 
 ### Added

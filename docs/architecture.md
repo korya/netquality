@@ -14,14 +14,17 @@ cmd/nq ──────────┐                      cmd/nqserver
   transport.go per-flow transports, dial override, proxy/chain inspection
   probe.go     foreign/self probes via net/http/httptrace
   load.go      load flows, byte accounting, upload body
-  stability.go draft algorithm (pure, clock-free)
-  stats.go     latency statistics, trimmed mean, RPM
+  engine/     (internal) pure decisions: see below
   target.go    config discovery and validation
   result.go    public result types + JSON contract
   events.go    progress events
                  │
                  ▼
         server/  draft-compliant handler, self-signed certs (test + nqserver)
+        internal/engine — pure, clock-free measurement logic
+  engine.go    one Observation per interval → one Decision; probe spacing; final summary
+  stability.go draft moving-average criterion, confidence
+  stats.go     latency statistics, trimmed mean, RPM
         internal/buildinfo  ldflags version metadata
 ```
 
@@ -38,7 +41,7 @@ real protocol in-process over TLS + HTTP/2 without a network.
 | One `*http.Transport` per load flow | Each flow is its own TCP/TLS connection (draft requirement); self probes multiplex onto it via HTTP/2. A user-supplied non-`*http.Transport` cannot be cloned, so flows may share connections and the library warns. |
 | Fresh connection per foreign/idle probe | `DisableKeepAlives` on a dedicated transport; `httptrace` supplies DNS/connect/TLS/TTFB stages. |
 | `DialContext` wrapper sees every connection | It implements `test_endpoint`, records remote/local IPs, and is bypassed by user `DialTLSContext` or custom `RoundTripper`s (documented limitation). |
-| Stability engine is pure | `stabilityTracker` takes one value per interval; the interval loop is driven by an injectable clock. Deterministic unit tests, real-clock integration tests. |
+| The engine is pure | `internal/engine` sees only `Observation`s (elapsed, bytes, flows, probe samples) and returns `Decision`s; it holds no clock, goroutine, or socket, so the same code runs against real transports and, in tests, against recorded series or a simulator. Public latency/confidence types are aliases of engine types. The interval loop in `run.go` is driven by an injectable clock. |
 | Cancellation via context only | Flows read bodies until the context ends; the upload body reader stops on context; no goroutine outlives `Run` (INV-4). |
 | Byte accounting is client-side | Upload bytes are counted when handed to the transport, so a few MB of HTTP/2 flow-control window may be in flight beyond `MaxBytes`. |
 | Interval default 1 s, not the draft's 5 s | A 12 s budget cannot fit four 5 s intervals; see README "Deviations" (INV-6). |

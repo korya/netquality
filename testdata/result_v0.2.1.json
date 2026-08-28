@@ -1,0 +1,42 @@
+{
+  "target": {
+    "config_url": "https://aim.cloudflare.com/responsiveness/api/v1/config",
+    "host": "h3.speed.cloudflare.com",
+    "test_endpoint": "speed.cloudflare.com",
+    "resolved_ips": ["172.66.0.218"],
+    "local_ips": ["192.168.68.110"],
+    "http_version": "HTTP/2.0",
+    "config": {
+      "version": 1,
+      "test_endpoint": "speed.cloudflare.com",
+      "small_download_url": "https://h3.speed.cloudflare.com/__down?bytes=10",
+      "large_download_url": "https://h3.speed.cloudflare.com/__down?bytes=4000000000",
+      "upload_url": "https://h3.speed.cloudflare.com/__up?bytes=4000000000"
+    }
+  },
+  "started_at": "2026-08-28T13:02:11.417-04:00",
+  "duration_ns": 5213000000,
+  "idle": {
+    "samples": 2, "min_ns": 118000000, "median_ns": 121000000, "mean_ns": 121000000,
+    "p95_ns": 124000000, "max_ns": 124000000, "jitter_ns": 3000000,
+    "stages": {"dns_ns": 2000000, "connect_ns": 38000000, "tls_ns": 41000000, "tls_per_rtt_ns": 41000000, "ttfb_ns": 39000000}
+  },
+  "download": {
+    "direction": "download",
+    "throughput_bps": 412500000, "peak_throughput_bps": 520100000, "mean_throughput_bps": 425000000,
+    "bytes": 262144000, "duration_ns": 4700000000, "flows": 5, "intervals": 4,
+    "throughput_stable": false, "responsiveness_stable": false,
+    "throughput_confidence": "medium", "responsiveness_confidence": "low",
+    "truncated": true, "reason": "bytes_cap",
+    "loaded": {
+      "foreign": {"samples": 182, "min_ns": 150000000, "median_ns": 561700000, "mean_ns": 600000000, "p95_ns": 1411000000, "max_ns": 1600000000, "jitter_ns": 200000000,
+                  "stages": {"dns_ns": 2000000, "connect_ns": 180000000, "tls_ns": 190000000, "tls_per_rtt_ns": 190000000, "ttfb_ns": 190000000}},
+      "self": {"samples": 180, "min_ns": 100000000, "median_ns": 175000000, "mean_ns": 180000000, "p95_ns": 300000000, "max_ns": 320000000, "jitter_ns": 40000000},
+      "combined": {"samples": 362, "min_ns": 100000000, "median_ns": 200000000, "mean_ns": 390000000, "p95_ns": 1200000000, "max_ns": 1600000000, "jitter_ns": 250000000}
+    },
+    "rpm": 631, "foreign_rpm": 920, "self_rpm": 342,
+    "http_version": "HTTP/2.0", "flow_errors": 0
+  },
+  "cancelled": false,
+  "warnings": ["download: byte cap (262144000 bytes) hit before stabilisation; result truncated"]
+}

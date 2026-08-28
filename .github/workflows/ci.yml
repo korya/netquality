@@ -41,6 +41,19 @@ jobs:
       - uses: actions/setup-go@v5
         with: { go-version: '1.26.7' } # must match the `go` directive's minor in go.mod
       - run: go test -count=1 ./...
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: '1.27.0' }
+      - name: Fuzz parsers briefly (seed corpus always runs in go test; this explores)
+        run: |
+          set -e
+          go test -run '^$' -fuzz=FuzzParseServerConfig -fuzztime=20s .
+          go test -run '^$' -fuzz=FuzzAuthorize -fuzztime=10s ./server
+          go test -run '^$' -fuzz=FuzzVerifySignature -fuzztime=20s ./server
+          go test -run '^$' -fuzz=FuzzParseBytes -fuzztime=10s ./cmd/nq
   cross-compile:
     runs-on: ubuntu-latest
     strategy:

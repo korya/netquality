@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -93,6 +94,57 @@ func hostOnly(hostport string) string {
 	return hostport
 }
 
+// ownedTransport is a transport the library created and therefore must tear
+// down completely (INV-4). CloseIdleConnections only closes idle
+// connections — an HTTP/2 connection still winding down a cancelled stream is
+// not idle and would outlive Run — so every dialled connection is tracked and
+// closed explicitly by closeAll.
+type ownedTransport struct {
+	*http.Transport
+	mu    sync.Mutex
+	conns map[net.Conn]struct{}
+}
+
+func (o *ownedTransport) track(c net.Conn) net.Conn {
+	tc := &trackedConn{Conn: c, owner: o}
+	o.mu.Lock()
+	o.conns[tc] = struct{}{}
+	o.mu.Unlock()
+	return tc
+}
+
+func (o *ownedTransport) forget(c net.Conn) {
+	o.mu.Lock()
+	delete(o.conns, c)
+	o.mu.Unlock()
+}
+
+// closeAll closes idle connections through the transport and every live one
+// directly.
+func (o *ownedTransport) closeAll() {
+	o.CloseIdleConnections()
+	o.mu.Lock()
+	conns := make([]net.Conn, 0, len(o.conns))
+	for c := range o.conns {
+		conns = append(conns, c)
+	}
+	o.mu.Unlock()
+	for _, c := range conns {
+		_ = c.Close()
+	}
+}
+
+type trackedConn struct {
+	net.Conn
+	owner *ownedTransport
+	once  sync.Once
+}
+
+func (c *trackedConn) Close() error {
+	c.once.Do(func() { c.owner.forget(c) })
+	return c.Conn.Close()
+}
+
 // newTransport returns a fresh transport with its own connection pool.
 // keepAlive=false yields a transport whose every request uses a brand-new
 // connection (foreign/idle probes).
@@ -101,6 +153,7 @@ func (f *transportFactory) newTransport(keepAlive bool) http.RoundTripper {
 		return f.custom
 	}
 	t := f.base.Clone()
+	owned := &ownedTransport{Transport: t, conns: map[net.Conn]struct{}{}}
 	t.DisableCompression = true
 	t.ForceAttemptHTTP2 = true
 	t.MaxConnsPerHost = 0
@@ -135,14 +188,18 @@ func (f *transportFactory) newTransport(keepAlive bool) http.RoundTripper {
 		if la := c.LocalAddr(); la != nil {
 			f.local.add(hostOnly(la.String()))
 		}
-		return c, nil
+		return owned.track(c), nil
 	}
-	return t
+	return owned
 }
 
-// closeIdle releases pooled connections of a transport we created.
+// closeIdle tears down a transport we created; a caller-supplied
+// RoundTripper is left alone.
 func closeIdle(rt http.RoundTripper) {
-	if t, ok := rt.(*http.Transport); ok {
+	switch t := rt.(type) {
+	case *ownedTransport:
+		t.closeAll()
+	case *http.Transport:
 		t.CloseIdleConnections()
 	}
 }

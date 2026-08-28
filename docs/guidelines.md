@@ -37,6 +37,18 @@ Process rules for changing this repository. Product behaviour lives in
    end-to-end otherwise; add matrix rows.
 5. Plan end-to-end verification — which `nq` invocation or test proves it.
 
+## Goldens and ledgers
+
+Three fixtures pin contracts: `testdata/result_schema.txt` (the JSON shape),
+`testdata/result_v0.2.1.json` (an old document that must keep parsing), and
+`internal/engine/testdata/cost_ledger.json` (bytes and seconds per algorithm
+scenario). A test that fails against one of them is asking a question —
+"did you mean to change this?" — not reporting a bug. If yes, regenerate
+with `UPDATE_GOLDEN=1 go test <package>` in the same commit and let the
+fixture diff carry the review; never edit a fixture by hand. Fuzz targets
+(`go test -fuzz=<Name> -fuzztime=30s <package>`) guard the parsers; a
+crasher lands in `testdata/fuzz/` and is committed as a regression test.
+
 ## Algorithm changes
 
 Every change to the measurement algorithm is judged by the scenario matrix

@@ -80,22 +80,24 @@ func TestTokenProtectedServer(t *testing.T) {
 		"empty":    func() Options { o := tokenOpts(""); o.Header = http.Header{"Authorization": {"Bearer "}}; return o }(),
 	} {
 		t.Run(name, func(t *testing.T) {
-			before := loadBytes.Load()
 			res, err := Run(context.Background(), target, o)
 			if err == nil || !strings.Contains(err.Error(), "401") || res != nil {
 				t.Errorf("err=%v res=%v", err, res)
 			}
-			if moved := loadBytes.Load() - before; moved != 0 {
-				t.Errorf("load traffic sent despite 401: %d bytes", moved)
+			if moved := loadBytes.Load(); moved != 0 {
+				t.Errorf("load traffic sent to an unauthenticated request: %d bytes", moved)
 			}
 		})
 	}
 }
 
-// countLarge wraps h to count bytes written by the large endpoint.
+// countLarge wraps h to count bytes written by the large endpoint to
+// requests that do not carry the valid token. Authorised runs may still be
+// flushing chunks into closing sockets after Run returns, so counting every
+// write would race with the previous, legitimate run.
 func countLarge(h http.Handler, n *atomic.Int64) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == server.LargePath {
+		if r.URL.Path == server.LargePath && r.Header.Get("Authorization") != "Bearer s3cret" {
 			w = &countingResponseWriter{ResponseWriter: w, n: n}
 		}
 		h.ServeHTTP(w, r)

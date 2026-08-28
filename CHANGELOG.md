@@ -5,6 +5,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-08-28
+
 ### Added
 - `target.local_ips`: the local source addresses the test's connections used,
   for correlating a stored result with the network it was taken on (#5).
@@ -69,7 +71,8 @@ All notable changes to this project are documented here. The format follows
 - Unit, loopback integration and opt-in live (`NQ_LIVE=1`) tests; CI on
   Linux/macOS/Windows plus a six-target cross-compile matrix.
 
-[Unreleased]: https://github.com/korya/netquality/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/korya/netquality/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/korya/netquality/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/korya/netquality/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/korya/netquality/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/korya/netquality/releases/tag/v0.1.0

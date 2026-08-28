@@ -151,6 +151,22 @@ directory relative to the repo root; `.` is the library.
 |---|---|---|---|
 | Public servers | Apple and Cloudflare produce idle/RPM/throughput without proxy flags | . | TestLive |
 
+## Regression guards
+
+Tests that protect invariants and contracts against future changes rather
+than describe a feature. Goldens are regenerated deliberately with
+`UPDATE_GOLDEN=1 go test <pkg>`; the diff is the review.
+
+| Guard | Scenario | Package | Test |
+|---|---|---|---|
+| INV-4 | Eight mixed runs (download, upload, cancelled) leave no goroutine or connection behind | . | TestNoLeaksAcrossRuns |
+| Wire contract | Identity encoding on every request, octet-stream POST uploads, GET elsewhere, fresh connection per idle/foreign probe, self probes on load connections | . | TestWireContract |
+| No global state | Differently configured runs in one process do not influence each other | . | TestRepeatedRunsAreIndependent |
+| INV-7 | Every JSON path and kind of `Result` pinned in `testdata/result_schema.txt`; snake_case enforced | . | TestResultSchemaGolden |
+| INV-7 | A v0.2.1 result document still parses with values intact; unknown fields ignored | . | TestOldResultDocumentsStillParse |
+| Parsers | Fuzz targets with seed corpora: config document, bearer parsing, signature verification, size flag (CI explores for a few seconds; seeds always run) | ., server, cmd/nq | FuzzParseServerConfig, FuzzAuthorize, FuzzVerifySignature, FuzzParseBytes |
+| Cost | Bytes and seconds per algorithm scenario pinned in `internal/engine/testdata/cost_ledger.json` (±15 %); a cheaper run must be recorded, a dearer one fails | internal/engine | TestAlgorithmScenarios |
+
 ## Algorithm scenarios (`internal/engine`, `internal/linksim`)
 
 The engine runs against a fluid link model instead of sockets. Scenarios are

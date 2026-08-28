@@ -1,8 +1,12 @@
 package engine_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
+	"os"
+	"path/filepath"
+	"sort"
 	"testing"
 	"time"
 
@@ -87,11 +91,38 @@ var knownFailing = map[string]string{
 	"capacity halves at 5s (200M→100M)": "capacity change not detected",
 }
 
+// cost is what a scenario spent; the ledger in testdata/cost_ledger.json
+// pins it so an algorithm change that makes a run more expensive fails here
+// instead of shipping. Regenerate deliberately with UPDATE_GOLDEN=1.
+type cost struct {
+	Bytes   int64   `json:"bytes"`
+	Seconds float64 `json:"seconds"`
+}
+
+const costTolerance = 0.15 // fraction; simulator is deterministic, this absorbs jitter seeds
+
 func TestAlgorithmScenarios(t *testing.T) {
 	var pass, target, known, stale int
+	ledgerPath := filepath.Join("testdata", "cost_ledger.json")
+	ledger := map[string]cost{}
+	if b, err := os.ReadFile(ledgerPath); err == nil {
+		if err := json.Unmarshal(b, &ledger); err != nil {
+			t.Fatal(err)
+		}
+	}
+	observed := map[string]cost{}
 	for _, sc := range scenarios() {
 		t.Run(sc.name, func(t *testing.T) {
 			o := linksim.Run(sc.link, sc.params, 16, sc.budget)
+			observed[sc.name] = cost{Bytes: o.Bytes, Seconds: math.Round(o.Elapsed.Seconds()*100) / 100}
+			if want, ok := ledger[sc.name]; ok && os.Getenv("UPDATE_GOLDEN") == "" {
+				if float64(o.Bytes) > float64(want.Bytes)*(1+costTolerance) || o.Elapsed.Seconds() > want.Seconds*(1+costTolerance)+0.05 {
+					t.Errorf("COST: %s / %.1fs exceeds ledger %s / %.1fs by more than %.0f%%", hB(o.Bytes), o.Elapsed.Seconds(), hB(want.Bytes), want.Seconds, costTolerance*100)
+				}
+				if float64(o.Bytes) < float64(want.Bytes)*(1-costTolerance) && o.Elapsed.Seconds() < want.Seconds*(1-costTolerance) {
+					t.Errorf("COST: cheaper than the ledger (%s / %.1fs vs %s / %.1fs) — good, now run UPDATE_GOLDEN=1 to record it", hB(o.Bytes), o.Elapsed.Seconds(), hB(want.Bytes), want.Seconds)
+				}
+			}
 			s := o.Summary
 			est := s.ThroughputBPS
 			truth := o.TrueCapacity
@@ -151,6 +182,33 @@ func TestAlgorithmScenarios(t *testing.T) {
 		})
 	}
 	t.Logf("scorecard: %d pass, %d known failing, %d unexpected, %d stale", pass, known, target, stale)
+	if os.Getenv("UPDATE_GOLDEN") != "" {
+		names := make([]string, 0, len(observed))
+		for n := range observed {
+			names = append(names, n)
+		}
+		sort.Strings(names)
+		ordered := make(map[string]cost, len(observed))
+		for _, n := range names {
+			ordered[n] = observed[n]
+		}
+		b, _ := json.MarshalIndent(ordered, "", "  ")
+		if err := os.WriteFile(ledgerPath, append(b, '\n'), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("wrote %s", ledgerPath)
+		return
+	}
+	for name := range observed {
+		if _, ok := ledger[name]; !ok {
+			t.Errorf("COST: %q is not in the ledger — run UPDATE_GOLDEN=1 go test ./internal/engine", name)
+		}
+	}
+	for name := range ledger {
+		if _, ok := observed[name]; !ok {
+			t.Errorf("COST: ledger has %q but no such scenario exists — regenerate", name)
+		}
+	}
 }
 
 func hb(bps float64) string {

@@ -1,0 +1,126 @@
+{
+  "10G unlimited bytes": {
+    "bytes": 8595478750,
+    "seconds": 7
+  },
+  "1G unlimited bytes": {
+    "bytes": 978087175,
+    "seconds": 8
+  },
+  "bloated 1.00G": {
+    "bytes": 262419763,
+    "seconds": 2.36
+  },
+  "bloated 10.00G": {
+    "bytes": 274631769,
+    "seconds": 0.58
+  },
+  "bloated 100.0M": {
+    "bytes": 135483770,
+    "seconds": 11
+  },
+  "bloated 30.0M": {
+    "bytes": 40836583,
+    "seconds": 11
+  },
+  "bloated 400.0M": {
+    "bytes": 262449508,
+    "seconds": 5.47
+  },
+  "bloated 5.0M": {
+    "bytes": 6850677,
+    "seconds": 11
+  },
+  "capacity halves at 5s (200M→100M)": {
+    "bytes": 157722349,
+    "seconds": 8
+  },
+  "cdn per-flow cap 200M on 1G": {
+    "bytes": 262597652,
+    "seconds": 4.23
+  },
+  "clean 1.00G rtt=10ms": {
+    "bytes": 262528750,
+    "seconds": 2.19
+  },
+  "clean 1.00G rtt=150ms": {
+    "bytes": 262278214,
+    "seconds": 3.38
+  },
+  "clean 1.00G rtt=50ms": {
+    "bytes": 262349624,
+    "seconds": 2.53
+  },
+  "clean 10.00G rtt=10ms": {
+    "bytes": 270478750,
+    "seconds": 0.34
+  },
+  "clean 10.00G rtt=150ms": {
+    "bytes": 262986877,
+    "seconds": 1.99
+  },
+  "clean 10.00G rtt=50ms": {
+    "bytes": 265858510,
+    "seconds": 0.81
+  },
+  "clean 100.0M rtt=10ms": {
+    "bytes": 86783750,
+    "seconds": 7
+  },
+  "clean 100.0M rtt=150ms": {
+    "bytes": 127658725,
+    "seconds": 11
+  },
+  "clean 100.0M rtt=50ms": {
+    "bytes": 96678309,
+    "seconds": 8
+  },
+  "clean 30.0M rtt=10ms": {
+    "bytes": 26101250,
+    "seconds": 7
+  },
+  "clean 30.0M rtt=150ms": {
+    "bytes": 39256147,
+    "seconds": 11
+  },
+  "clean 30.0M rtt=50ms": {
+    "bytes": 29323094,
+    "seconds": 8
+  },
+  "clean 400.0M rtt=10ms": {
+    "bytes": 262638750,
+    "seconds": 5.33
+  },
+  "clean 400.0M rtt=150ms": {
+    "bytes": 262293483,
+    "seconds": 6.33
+  },
+  "clean 400.0M rtt=50ms": {
+    "bytes": 262238456,
+    "seconds": 5.61
+  },
+  "clean 5.0M rtt=10ms": {
+    "bytes": 4365000,
+    "seconds": 7
+  },
+  "clean 5.0M rtt=150ms": {
+    "bytes": 4888020,
+    "seconds": 8
+  },
+  "clean 5.0M rtt=50ms": {
+    "bytes": 4335962,
+    "seconds": 7
+  },
+  "shaper burst 20MB on 50M": {
+    "bytes": 95086000,
+    "seconds": 12
+  },
+  "tick jitter 200ms on 100M": {
+    "bytes": 93233770,
+    "seconds": 7.62
+  },
+  "upload send buffer 4MiB on 20M": {
+    "bytes": 46553009,
+    "seconds": 7
+  }
+}

@@ -186,6 +186,15 @@ func (r *runner) discover(ctx context.Context, t Target) (*ServerConfig, error) 
 	if rt == nil {
 		rt = http.DefaultTransport
 	}
+	// Use a throwaway clone so the config connection does not linger in the
+	// caller's pool after Run returns (INV-4). A custom RoundTripper cannot be
+	// cloned and is used as-is.
+	if t, ok := rt.(*http.Transport); ok {
+		c := t.Clone()
+		c.DisableKeepAlives = true
+		defer c.CloseIdleConnections()
+		rt = c
+	}
 	resp, err := rt.RoundTrip(req)
 	if err != nil {
 		return nil, fmt.Errorf("netquality: fetch config: %w", err)

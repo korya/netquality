@@ -270,7 +270,7 @@ func parseBytes(s string) (int64, error) {
 		}
 	}
 	v, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
-	if err != nil || v <= 0 {
+	if err != nil || v <= 0 || v*float64(mult) < 1 || v*float64(mult) > float64(1<<62) {
 		return 0, fmt.Errorf("invalid size %q", s)
 	}
 	return int64(v * float64(mult)), nil

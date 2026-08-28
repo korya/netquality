@@ -5,6 +5,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- Every load phase leaked one HTTP/2 connection and its read/write
+  goroutines when a stream was still winding down at teardown (present since
+  v0.1.0); the config fetch also left a keep-alive connection in the caller's
+  transport pool. All library-dialled connections are now tracked and closed
+  when `Run` returns (INV-4).
+- `nq --max-bytes` rejected 0 but accepted sub-byte values that rounded to 0
+  and silently meant the default.
+
+### Added
+- Regression guards: leak check across mixed runs, wire-contract test,
+  repeated-run isolation, JSON schema golden and v0.2.1 document fixture,
+  fuzz targets for the four parsers (with a CI job), and a per-scenario cost
+  ledger for the algorithm matrix.
+
 ### Changed
 - A load phase that fails before completing an interval no longer discards
   the whole result: `Run` returns the partial `Result` (that direction

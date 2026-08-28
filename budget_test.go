@@ -32,30 +32,39 @@ func TestByteCounterLimits(t *testing.T) {
 }
 
 // TestNoByteCapByDefault: a default-options run on loopback is bounded by
-// time only, never reports bytes_cap in either direction, and moves more
-// than the old 250 MiB cap — proving the cap is gone, not merely unreported.
+// time only and never reports bytes_cap in either direction. Proving the cap
+// is really gone cannot use an absolute byte floor (CI loopback under -race
+// runs at a few hundred Mbps), so it is relative: the same run with a small
+// explicit cap must move far less than the uncapped one.
 func TestNoByteCapByDefault(t *testing.T) {
 	target, client := newTestServer(t, server.Options{})
+	const smallCap = 32 << 20
 	for _, dir := range []Directions{Download, Upload} {
 		t.Run(dir.String(), func(t *testing.T) {
-			res, err := Run(context.Background(), target, Options{HTTPClient: client, Directions: dir, IdleProbes: -1,
-				MaxDuration: 3 * time.Second, Stability: fastStability()})
-			if err != nil {
-				t.Fatal(err)
+			run := func(maxBytes int64) *DirectionResult {
+				res, err := Run(context.Background(), target, Options{HTTPClient: client, Directions: dir, IdleProbes: -1,
+					MaxDuration: 2 * time.Second, MaxBytes: maxBytes, Stability: fastStability()})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if dir == Upload {
+					return res.Upload
+				}
+				return res.Download
 			}
-			d := res.Download
-			if dir == Upload {
-				d = res.Upload
+			free := run(0)
+			if free.Reason == ReasonBytesCap {
+				t.Errorf("default run must not be byte-capped: %+v", free)
 			}
-			if d.Reason == ReasonBytesCap || hasWarning(res, "byte cap") {
-				t.Errorf("default run must not be byte-capped: %+v %v", d, res.Warnings)
+			if free.Reason != ReasonNone && free.Reason != ReasonDurationCap {
+				t.Errorf("reason = %q", free.Reason)
 			}
-			if d.Reason != ReasonNone && d.Reason != ReasonDurationCap {
-				t.Errorf("reason = %q", d.Reason)
+			capped := run(smallCap)
+			if capped.Reason != ReasonBytesCap {
+				t.Errorf("explicit cap must still bite: %+v", capped)
 			}
-			const oldCap = 250 << 20
-			if d.Bytes <= oldCap {
-				t.Errorf("%s moved only %s in 3 s; the old 250 MiB cap would not have been exceeded", dir, hB(d.Bytes))
+			if free.Bytes < 3*capped.Bytes {
+				t.Errorf("%s: uncapped run moved %s, capped %s — the default is not unlimited", dir, hB(free.Bytes), hB(capped.Bytes))
 			}
 		})
 	}

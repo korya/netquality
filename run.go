@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/korya/netquality/internal/engine"
 	"io"
 	"math"
 	"math/rand"
@@ -227,7 +228,7 @@ func (r *runner) idle(ctx context.Context) (*LatencyStats, error) {
 		}
 		return nil, lastErr
 	}
-	st := computeLatencyStats(samples)
+	st := engine.ComputeLatencyStats(samples)
 	return &st, nil
 }
 
@@ -330,34 +331,6 @@ func (p *phaseState) proto() string {
 	return ""
 }
 
-// responsiveness computes the draft's RPM figures over a sample set.
-func responsiveness(foreign, self []LatencySample, tmp float64) (total, foreignRPM, selfRPM float64) {
-	if len(foreign) > 0 {
-		tcp := trimmedMean(durationsOf(foreign, func(s LatencySample) time.Duration { return s.Connect }), tmp)
-		tlsd := trimmedMean(durationsOf(foreign, func(s LatencySample) time.Duration { return s.tlsPerRTT() }), tmp)
-		httpf := trimmedMean(durationsOf(foreign, func(s LatencySample) time.Duration { return s.HTTP }), tmp)
-		var rtt time.Duration
-		if tlsd > 0 {
-			rtt = (tcp + tlsd + httpf) / 3
-		} else {
-			rtt = (tcp + httpf) / 2 // TCP-only case, draft 5.3.1.2
-		}
-		foreignRPM = rpm(rtt)
-	}
-	if len(self) > 0 {
-		selfRPM = rpm(trimmedMean(durationsOf(self, func(s LatencySample) time.Duration { return s.HTTP }), tmp))
-	}
-	switch {
-	case foreignRPM > 0 && selfRPM > 0:
-		total = (foreignRPM + selfRPM) / 2
-	case foreignRPM > 0:
-		total = foreignRPM
-	default:
-		total = selfRPM
-	}
-	return
-}
-
 // loadPhase runs one direction: ramp flows, probe, evaluate stability, stop on
 // stability or a limit.
 func (r *runner) loadPhase(ctx context.Context, dir Directions) (*DirectionResult, error) {
@@ -402,8 +375,8 @@ func (r *runner) loadPhase(ctx context.Context, dir Directions) (*DirectionResul
 	}
 
 	// Probe scheduler.
-	tp := newStabilityTracker(sp.MovingAverageDistance, sp.StdDevTolerance)
-	rp := newStabilityTracker(sp.MovingAverageDistance, sp.StdDevTolerance)
+	tp := engine.NewTracker(sp.MovingAverageDistance, sp.StdDevTolerance)
+	rp := engine.NewTracker(sp.MovingAverageDistance, sp.StdDevTolerance)
 	var probeWG sync.WaitGroup
 	probeWG.Add(1)
 	go func() {
@@ -438,25 +411,25 @@ loop:
 			if goodput > dr.PeakThroughputBPS {
 				dr.PeakThroughputBPS = goodput
 			}
-			avg := tp.push(goodput)
+			avg := tp.Push(goodput)
 			p.goodput.Store(math.Float64bits(avg))
 			dr.Intervals++
 			p.rotate()
 
 			ev := Event{Kind: EventInterval, Phase: dir.String(), Direction: dir.String(),
 				Interval: dr.Intervals, Flows: p.flowCount(), ThroughputBPS: avg, Bytes: cur}
-			if !goodputStable && tp.stable() {
+			if !goodputStable && tp.Stable() {
 				goodputStable = true
 				r.opts.Logger.Info("throughput stable", "dir", dir.String(), "bps", avg, "interval", dr.Intervals)
 			}
 			if goodputStable {
 				f, s := p.window(sp.MovingAverageDistance)
-				cur, _, _ := responsiveness(f, s, sp.TrimmedMeanPercent)
+				cur, _, _ := engine.Responsiveness(f, s, sp.TrimmedMeanPercent)
 				ev.RPM = cur
 				if cur > 0 {
-					rp.push(cur)
+					rp.Push(cur)
 				}
-				if rp.stable() {
+				if rp.Stable() {
 					r.emit(ev)
 					r.opts.Logger.Info("responsiveness stable", "dir", dir.String(), "rpm", cur)
 					p.stop(ReasonNone)
@@ -472,7 +445,7 @@ loop:
 		}
 	}
 	// Determine why we stopped, then tear everything down.
-	if p.reason == ReasonNone && pctx.Err() != nil && (!goodputStable || !rp.stable()) {
+	if p.reason == ReasonNone && pctx.Err() != nil && (!goodputStable || !rp.Stable()) {
 		p.stop(ctxReason(pctx))
 	}
 	cancel()
@@ -489,17 +462,17 @@ loop:
 	dr.Flows = p.flowCount()
 	dr.FlowErrors = p.flowErrs
 	dr.HTTPVersion = p.proto()
-	dr.ThroughputBPS = tp.current()
+	dr.ThroughputBPS = tp.Current()
 	if dr.Duration > 0 {
 		dr.MeanThroughputBPS = float64(dr.Bytes) * 8 / dr.Duration.Seconds()
 	}
 	if dr.Intervals == 0 {
 		dr.ThroughputBPS = dr.MeanThroughputBPS
 	}
-	dr.ThroughputStable = tp.stable()
-	dr.ThroughputConfidence = tp.confidence()
-	dr.ResponsivenessStable = rp.stable()
-	dr.ResponsivenessConfidence = rp.confidence()
+	dr.ThroughputStable = tp.Stable()
+	dr.ThroughputConfidence = tp.Confidence()
+	dr.ResponsivenessStable = rp.Stable()
+	dr.ResponsivenessConfidence = rp.Confidence()
 	if !goodputStable {
 		dr.ResponsivenessConfidence = ConfidenceLow
 	}
@@ -512,13 +485,13 @@ loop:
 	if len(f)+len(s) == 0 {
 		f, s = p.all()
 	}
-	dr.RPM, dr.ForeignRPM, dr.SelfRPM = responsiveness(f, s, sp.TrimmedMeanPercent)
+	dr.RPM, dr.ForeignRPM, dr.SelfRPM = engine.Responsiveness(f, s, sp.TrimmedMeanPercent)
 	if len(f) > 0 {
-		st := computeLatencyStats(f)
+		st := engine.ComputeLatencyStats(f)
 		dr.Loaded.Foreign = &st
 	}
 	if len(s) > 0 {
-		st := computeLatencyStats(s)
+		st := engine.ComputeLatencyStats(s)
 		dr.Loaded.Self = &st
 	}
 	if len(f)+len(s) > 0 {
@@ -529,7 +502,7 @@ loop:
 		for _, x := range s {
 			combined = append(combined, LatencySample{Total: x.HTTP})
 		}
-		st := computeLatencyStats(combined)
+		st := engine.ComputeLatencyStats(combined)
 		dr.Loaded.Combined = &st
 	}
 

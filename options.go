@@ -1,6 +1,7 @@
 package netquality
 
 import (
+	"github.com/korya/netquality/internal/engine"
 	"log/slog"
 	"net/http"
 	"time"
@@ -28,6 +29,15 @@ func (d Directions) String() string {
 		return "both"
 	}
 }
+
+// StabilityParams are the draft's algorithm parameters (Section 5.2); see the
+// engine package for field documentation.
+type StabilityParams = engine.StabilityParams
+
+// DefaultStabilityParams returns the draft-09 defaults, except Interval, which
+// is 1s instead of 5s so that a phase can stabilise within the 12s MaxDuration
+// budget (see README "Deviations").
+func DefaultStabilityParams() StabilityParams { return engine.DefaultStabilityParams() }
 
 // Default safety limits and probe counts.
 const (
@@ -88,7 +98,7 @@ func (o Options) withDefaults() Options {
 	if o.ConfigTimeout <= 0 {
 		o.ConfigTimeout = DefaultConfigTimeout
 	}
-	o.Stability = o.Stability.withDefaults()
+	o.Stability = o.Stability.WithDefaults()
 	if o.HTTPClient == nil {
 		o.HTTPClient = &http.Client{}
 	}

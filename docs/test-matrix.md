@@ -184,7 +184,7 @@ than describe a feature. Goldens are regenerated deliberately with
 |---|---|---|---|
 | INV-4 | Eight mixed runs (download, upload, cancelled) leave no goroutine and no open client socket behind, checked the instant `Run` returns | . | TestNoLeaksAcrossRuns |
 | Wire contract | Identity encoding on every request, octet-stream POST uploads, GET elsewhere, fresh connection per idle/foreign probe, self probes on load connections | . | TestWireContract |
-| No global state | Differently configured runs in one process do not influence each other | . | TestRepeatedRunsAreIndependent |
+| No global state | Differently configured runs in one process do not influence each other; each result's warnings name its own budget and no other run's | . | TestRepeatedRunsAreIndependent |
 | INV-7 | Every JSON path and kind of `Result` pinned in `testdata/result_schema.txt`; snake_case enforced | . | TestResultSchemaGolden |
 | INV-7 | A stored schema-1 document parses with values intact; `schema_version` readable first; unknown fields ignored | . | TestStoredResultDocumentParses |
 | Parsers | Fuzz targets with seed corpora: config document, bearer parsing, signature verification, size flag (CI explores for a few seconds; seeds always run) | ., server, cmd/nq | FuzzParseServerConfig, FuzzAuthorize, FuzzVerifySignature, FuzzParseBytes |

@@ -17,8 +17,10 @@ All notable changes to this project are documented here. The format follows
   20 Mbps upload reports 20 Mbps instead of 53. New `StabilityParams`
   fields: `SendBufferBytes`, `RampGainTolerance`, `ChangeTolerance`;
   `DefaultUploadSendBuffer`. `FlowIncrement` is now the floor of a step.
-- Engine summaries carry a sustained lower bound on throughput and the
-  matching RPM upper bound (not yet in `Result`; see #20).
+- Engine summaries carry a sustained lower bound on throughput — the lowest
+  goodput of the latest four consecutive measured intervals within tolerance
+  of their mean — and the matching RPM upper bound (not yet in `Result`;
+  see #20).
 
 ### Fixed
 - Throughput no longer measures the test's own probe traffic. The fixed

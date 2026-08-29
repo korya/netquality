@@ -90,17 +90,28 @@ func TestDrainIntervalExcludesSendBufferCredit(t *testing.T) {
 	}
 }
 
-func TestLowerBoundFromSustainedHoldWindow(t *testing.T) {
+func TestLowerBoundFromSustainedWindow(t *testing.T) {
 	flat := func(int) float64 { return 100e6 }
-	ds, e := linkModel(t, StabilityParams{}, 16, 12, flat, 0)
+	ds, e := linkModel(t, StabilityParams{}, 16, 16, flat, 0) // probeSet settles by interval 9
 	s := e.Summary(nil, nil)
 	if s.LowerBoundBPS != 100e6 || s.LowerBoundIntervals != 4 {
 		t.Fatalf("bound=%.0f over %d intervals from %d", s.LowerBoundBPS, s.LowerBoundIntervals, s.LowerBoundStart)
 	}
-	// Holds start at interval 3 (1: initial, 2: after the add); the first
-	// window is 3..6 and the latest ends at the last interval.
+	// The latest window ends at the last interval; a converged flat run has
+	// one even though it stops MAD intervals after the ramp.
 	if s.LowerBoundStart != len(ds)-3 {
 		t.Errorf("window start %d, want %d (latest window)", s.LowerBoundStart, len(ds)-3)
+	}
+	if !ds[len(ds)-1].Stop {
+		t.Errorf("flat run did not converge in %d intervals", len(ds))
+	}
+	// A drain interval breaks the window: 20 Mbps upload with 4 MiB credit
+	// drains at 1 and 3, so the first window is 4..7.
+	const credit = 4 << 20
+	slow := func(int) float64 { return 20e6 }
+	ds, e = linkModel(t, StabilityParams{SendBufferBytes: credit}, 16, 7, slow, credit)
+	if s := e.Summary(nil, nil); s.LowerBoundStart != 4 || s.LowerBoundBPS != 20e6 {
+		t.Errorf("upload window from %d (%.0f), want 4 (20e6); %d intervals", s.LowerBoundStart, s.LowerBoundBPS, len(ds))
 	}
 	if s.RPMUpperBound <= 0 || s.LowerBoundBPS > s.ThroughputBPS {
 		t.Errorf("rpm upper bound %.0f, bound %.0f > estimate %.0f", s.RPMUpperBound, s.LowerBoundBPS, s.ThroughputBPS)

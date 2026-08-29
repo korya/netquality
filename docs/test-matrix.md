@@ -66,7 +66,7 @@ directory relative to the repo root; `.` is the library.
 | Engine | Summary with no completed interval; InitialFlows capped by MaxFlows | internal/engine | TestEngineSummaryFallbacks |
 | Engine | Ramp doubles flows until a step gains < `RampGainTolerance`; negative tolerance ramps to the cap; `FlowIncrement` floors a step | internal/engine | TestRampDoublesUntilNoGain |
 | Engine | Drain interval: send-buffer credit of new flows excluded from goodput, peak and decisions; immaterial credit costs nothing | internal/engine | TestDrainIntervalExcludesSendBufferCredit |
-| Engine | Lower bound = minimum of the latest sustained window of hold intervals; none from an unstable series | internal/engine | TestLowerBoundFromSustainedHoldWindow |
+| Engine | Lower bound = minimum of the latest sustained window of measured intervals, present in a converged flat run; a drain interval breaks the window; none from an unstable series | internal/engine | TestLowerBoundFromSustainedWindow |
 | Engine | Goodput drop beyond `ChangeTolerance` restarts tracking and the bound window | internal/engine | TestCapacityDropRestartsGoodputTracking |
 | Engine | Phase stops only with both series stable | internal/engine | TestStopNeedsBothSeriesStable |
 

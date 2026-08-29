@@ -30,7 +30,7 @@ type Decision struct {
 	RPM                                    float64 // 0 until the ramp is done or throughput is stable
 	ThroughputStable, ResponsivenessStable bool
 	// Hold is true when no flow was added into this interval and it was not
-	// a drain interval: only hold intervals feed the lower bound.
+	// a drain interval.
 	Hold bool
 	// Drain is true when the interval was excluded from measurement because
 	// the send-buffer credit of newly opened flows would inflate it.
@@ -47,11 +47,12 @@ type Summary struct {
 	ResponsivenessConfidence               Confidence
 	RPM, ForeignRPM, SelfRPM               float64
 	Foreign, Self                          []LatencySample // samples the final figures were computed from
-	// LowerBoundBPS is the lowest goodput of the latest sustained window of
-	// hold intervals: MovingAverageDistance consecutive hold intervals whose
-	// goodputs are within StdDevTolerance of their mean. 0 when no such
-	// window formed. LowerBoundStart is the 1-based first interval of the
-	// window and LowerBoundIntervals its length.
+	// LowerBoundBPS is the lowest goodput of the latest sustained window:
+	// MovingAverageDistance consecutive measured (non-drain) intervals whose
+	// goodputs are within StdDevTolerance of their mean — agreement across a
+	// flow add shows the add changed nothing. 0 when no such window formed.
+	// LowerBoundStart is the 1-based first interval of the window and
+	// LowerBoundIntervals its length.
 	LowerBoundBPS       float64
 	LowerBoundStart     int
 	LowerBoundIntervals int
@@ -88,7 +89,7 @@ type Engine struct {
 	rampDone    bool
 	drainCredit int64 // bytes of credit to absorb in the next interval
 
-	// hold intervals since the last reset, for the lower bound
+	// measured intervals since the last reset, for the lower bound
 	holdG   []float64
 	holdIdx []int // 1-based interval numbers
 	lb      Summary
@@ -156,11 +157,9 @@ func (e *Engine) Interval(o Observation) Decision {
 			e.lb = Summary{}
 		}
 		e.tp.Push(goodput)
-		if d.Hold {
-			e.holdG = append(e.holdG, goodput)
-			e.holdIdx = append(e.holdIdx, e.intervals)
-			e.updateBound()
-		}
+		e.holdG = append(e.holdG, goodput)
+		e.holdIdx = append(e.holdIdx, e.intervals)
+		e.updateBound()
 	}
 	d.ThroughputBPS = e.tp.Current()
 	if !e.goodputStable && e.tp.Stable() {
@@ -215,9 +214,10 @@ func (e *Engine) Interval(o Observation) Decision {
 	return d
 }
 
-// updateBound refreshes the lower bound from the trailing hold intervals:
-// the last MAD of them must be consecutive intervals with goodputs within
-// StdDevTolerance of their mean; the bound is their minimum.
+// updateBound refreshes the lower bound from the trailing measured
+// intervals: the last MAD of them must be consecutive (no drain interval in
+// between) with goodputs within StdDevTolerance of their mean; the bound is
+// their minimum.
 func (e *Engine) updateBound() {
 	n := e.p.MovingAverageDistance
 	if len(e.holdG) < n {

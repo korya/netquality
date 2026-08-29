@@ -46,8 +46,9 @@ func TestProbeClockResolves(t *testing.T) {
 		return b.Sub(a)
 	}, 200*time.Millisecond)
 
-	// Telemetry: the numbers this platform actually delivers, recorded on every
-	// CI run rather than frozen into a doc that would rot.
+	// The numbers this platform actually delivers. go test hides these unless
+	// the test fails or -v is set, which is the right trade: they are wanted
+	// exactly when an assertion below is arguing with the environment.
 	t.Logf("probe clock: %v over %d positive samples (high resolution: %v)", mono, monoN, monoHighResolution())
 	t.Logf("time.Now:    %v over %d positive samples", wall, wallN)
 

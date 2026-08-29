@@ -135,6 +135,7 @@ directory relative to the repo root; `.` is the library.
 | TLS | Self-signed cert covers hosts/IPs, h2 ALPN | server | TestSelfSignedCert |
 | Binary | Usage/version/no-TLS/bad cert/bad listen exit codes | cmd/nqserver | TestUsageAndVersion |
 | Binary | `--self-signed` server passes a full `nq` run | cmd/nqserver | TestServeSelfSignedEndToEnd |
+| Binary | `--idle-timeout` closes a quiet HTTP/1.1 keep-alive and HTTP/2 connection; a busy one is untouched (SRV-11) | cmd/nqserver | TestIdleTimeoutClosesQuietConnections |
 | Binary | `--cert/--key` + `--base-url`; anonymous request 401, token 200 | cmd/nqserver | TestServeWithCertFilesAndBaseURL |
 | Binary | Token from `NQSERVER_AUTH_TOKEN`; `--allow-anonymous` with a real cert | cmd/nqserver | TestTokenFromEnvAndAnonymousOptIn |
 | Auth | Bearer parsing: case, whitespace, wrong/prefix/suffix, wrong scheme, oversized, unicode | server | TestAuthorize |
@@ -142,6 +143,7 @@ directory relative to the repo root; `.` is the library.
 | Limits | Per-client budget: allow while positive, charge actual bytes, refill, per-IP | server | TestClientBudget |
 | Limits | 429 + Retry-After when exhausted; config and small exempt; upload cap | server | TestHandlerBudgetAndUploadCap |
 | Limits | Connection cap blocks the N+1th accept and releases on close | server | TestLimitListener |
+| Connection cap | Closing the listener at the cap releases the waiting Accept (SRV-9) | server | TestLimitListenerCloseAtCap |
 | Auth (client) | `Options.Header` reaches config, small, large and upload; overrides User-Agent | . | TestHeadersReachEveryRoute |
 | Auth (client) | Full run with token; wrong/missing/Basic/oversized/empty fail at discovery with 401 and zero load bytes | . | TestTokenProtectedServer |
 | Limits (client) | Budget exhausted mid-run ends with a flagged flow_error, not a hang | . | TestBudgetExhaustedMidRunIsGraceful |

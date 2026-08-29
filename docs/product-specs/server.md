@@ -54,7 +54,14 @@ One upload request accepts at most `--upload-size` bytes (default 16 GiB) and
 then answers normally; the large download is bounded by `--large-size`.
 `--max-connections` (default 256) caps simultaneous connections: further
 connections wait in the accept queue rather than fail, so a client bounded by
-its own `MaxDuration` still completes with fewer flows.
+its own `MaxDuration` still completes with fewer flows. Closing the listener
+releases an accept waiting at the cap, so shutdown does not hang.
+
+### SRV-11: Idle connections
+A connection with no request in flight for `--idle-timeout` (default 2 min)
+is closed, over HTTP/1.1 and HTTP/2 alike. An HTTP/2 peer silent for 30 s is
+pinged and closed if it does not answer within 15 s. Neither cuts a transfer
+in progress: no read or write timeout bounds a request.
 
 ### SRV-10: Signed URLs
 With one or more `--signing-key`s, the three test endpoints also accept a URL

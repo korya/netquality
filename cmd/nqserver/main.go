@@ -115,6 +115,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, onListen 
 		signingKey multiFlag
 		uploadSize = fs.Int64("upload-size", 16<<30, "maximum bytes accepted by one upload request")
 		maxConns   = fs.Int("max-connections", 256, "maximum simultaneous connections (0 = unlimited)")
+		idleTO     = fs.Duration("idle-timeout", 2*time.Minute, "close a connection with no request in flight for this long")
 		clientMax  = fs.Int64("client-bytes", 0, "bytes one client IP may move per --client-window before 429 (-1 = unlimited; default 8 GiB, unlimited with --self-signed)")
 		clientWin  = fs.Duration("client-window", server.DefaultClientWindow, "window for --client-bytes")
 		version    = fs.Bool("version", false, "print version and exit")
@@ -181,6 +182,12 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, onListen 
 			AuthToken: *authToken, SigningKeys: keys, UploadSize: *uploadSize, MaxClientBytes: *clientMax, ClientWindow: *clientWin}),
 		TLSConfig:         server.TLSConfig(cert),
 		ReadHeaderTimeout: 10 * time.Second,
+		// IdleTimeout reaps connections between requests; it never bounds an
+		// in-flight transfer (ReadTimeout/WriteTimeout stay unset on purpose).
+		// A stalled HTTP/2 stream is not idle, so the pings cover a peer that
+		// stops answering mid-transfer.
+		IdleTimeout: *idleTO,
+		HTTP2:       &http.HTTP2Config{SendPingTimeout: 30 * time.Second, PingTimeout: 15 * time.Second},
 	}
 	var modes []string
 	if *authToken != "" {
@@ -193,8 +200,8 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, onListen 
 	if mode == "" {
 		mode = "ANONYMOUS"
 	}
-	fmt.Fprintf(stderr, "nqserver %s listening on %s (config at https://<host>%s) %s, upload cap %d B, client budget %d B/%s, max connections %d\n",
-		buildinfo.String(), ln.Addr(), server.ConfigPath, mode, *uploadSize, *clientMax, *clientWin, *maxConns)
+	fmt.Fprintf(stderr, "nqserver %s listening on %s (config at https://<host>%s) %s, upload cap %d B, client budget %d B/%s, max connections %d, idle timeout %s\n",
+		buildinfo.String(), ln.Addr(), server.ConfigPath, mode, *uploadSize, *clientMax, *clientWin, *maxConns, *idleTO)
 	if onListen != nil {
 		onListen(ln.Addr())
 	}

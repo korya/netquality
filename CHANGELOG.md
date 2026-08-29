@@ -5,6 +5,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- `nqserver` closes idle connections (`--idle-timeout`, default 2 min) and
+  pings silent HTTP/2 peers (30 s + 15 s); previously a connection whose
+  client had gone quiet was held until the process exited (#24).
+- `server.LimitListener`: `Close` now releases an `Accept` waiting at the
+  connection cap, so `http.Server.Serve` returns and `Shutdown` no longer
+  waits out its timeout (#24).
+
 ### Changed
 - **Ramp-and-hold algorithm** (#20). Flows are added in doubling steps and the
   ramp stops when a step gains less than 10 % goodput; responsiveness is

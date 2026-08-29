@@ -338,3 +338,41 @@ func TestLimitListener(t *testing.T) {
 		t.Error("0 must mean unlimited")
 	}
 }
+
+// TestLimitListenerCloseAtCap: Close must release an Accept that is waiting
+// at the cap (SRV-9); before, it blocked on the semaphore and Serve hung.
+func TestLimitListenerCloseAtCap(t *testing.T) {
+	inner, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ln := LimitListener(inner, 1)
+	c1, err := net.Dial("tcp", ln.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = c1.Close() }()
+	a1, err := ln.Accept()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = a1.Close() }()
+	errCh := make(chan error, 1)
+	go func() { _, err := ln.Accept(); errCh <- err }() // blocks at the cap
+	time.Sleep(50 * time.Millisecond)
+	if err := ln.Close(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-errCh:
+		if err == nil {
+			t.Error("Accept returned a connection after Close")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Accept still blocked after Close")
+	}
+	if _, err := ln.Accept(); err == nil {
+		t.Error("Accept after Close must fail")
+	}
+	_ = ln.Close() // idempotent
+}

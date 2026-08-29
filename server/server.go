@@ -294,27 +294,39 @@ func Handler(o Options) http.Handler {
 
 // LimitListener caps the number of simultaneously open connections. Accept
 // blocks once max connections are open and resumes as they close; clients
-// wait rather than fail, and are bounded by their own MaxDuration.
+// wait rather than fail, and are bounded by their own MaxDuration. Close
+// releases an Accept waiting at the cap, so http.Server.Serve returns.
 func LimitListener(l net.Listener, max int) net.Listener {
 	if max <= 0 {
 		return l
 	}
-	return &limitListener{Listener: l, sem: make(chan struct{}, max)}
+	return &limitListener{Listener: l, sem: make(chan struct{}, max), done: make(chan struct{})}
 }
 
 type limitListener struct {
 	net.Listener
-	sem chan struct{}
+	sem       chan struct{}
+	done      chan struct{}
+	closeOnce sync.Once
 }
 
 func (l *limitListener) Accept() (net.Conn, error) {
-	l.sem <- struct{}{}
+	select {
+	case l.sem <- struct{}{}:
+	case <-l.done:
+		return nil, net.ErrClosed
+	}
 	c, err := l.Listener.Accept()
 	if err != nil {
 		<-l.sem
 		return nil, err
 	}
 	return &limitedConn{Conn: c, release: func() { <-l.sem }}, nil
+}
+
+func (l *limitListener) Close() error {
+	l.closeOnce.Do(func() { close(l.done) })
+	return l.Listener.Close()
 }
 
 type limitedConn struct {

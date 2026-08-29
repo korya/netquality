@@ -147,6 +147,7 @@ whether a request may *start*, never slow one down:
 | `--upload-size` | 16 GiB | bytes accepted by one upload |
 | `--large-size` | 8 GiB | bytes served by one download |
 | `--max-connections` | 256 | extra connections wait in the accept queue |
+| `--idle-timeout` | 2 min | closes a connection with no request in flight; HTTP/2 peers are pinged after 30 s of silence; transfers are never cut |
 
 Behind a load balancer the client key is the balancer's address; the server
 deliberately does not trust `X-Forwarded-For` — use signed URLs with a

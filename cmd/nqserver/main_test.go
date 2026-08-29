@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/ecdsa"
@@ -10,8 +11,11 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
+	"io"
 	"net"
 	"net/http"
+	"net/http/httptrace"
 	"os"
 	"path/filepath"
 	"strings"
@@ -163,6 +167,65 @@ func TestServeSelfSignedEndToEnd(t *testing.T) {
 	}
 	if res.Target.TestEndpoint != "127.0.0.1" || res.Download == nil || res.Upload == nil || res.Download.HTTPVersion != "HTTP/2.0" {
 		t.Errorf("%+v", res.Target)
+	}
+}
+
+// TestIdleTimeoutClosesQuietConnections covers SRV-11: a connection with no
+// request in flight is closed after --idle-timeout, over HTTP/1.1 (EOF on the
+// raw connection) and HTTP/2 (the client's next request opens a new one).
+func TestIdleTimeoutClosesQuietConnections(t *testing.T) {
+	addr := serve(t, "--self-signed", "--idle-timeout", "200ms")
+	tlsCfg := &tls.Config{InsecureSkipVerify: true, NextProtos: []string{"http/1.1"}} //nolint:gosec // self-signed
+	c, err := tls.Dial("tcp", addr.String(), tlsCfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = c.Close() }()
+	if _, err := fmt.Fprintf(c, "GET %s HTTP/1.1\r\nHost: %s\r\n\r\n", server.ConfigPath, addr); err != nil {
+		t.Fatal(err)
+	}
+	res, err := http.ReadResponse(bufio.NewReader(c), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = io.Copy(io.Discard, res.Body)
+	_ = res.Body.Close()
+	if res.StatusCode != http.StatusOK || res.Close {
+		t.Fatalf("status %d close=%v: keep-alive expected", res.StatusCode, res.Close)
+	}
+	start := time.Now()
+	_ = c.SetReadDeadline(time.Now().Add(5 * time.Second))
+	if n, err := c.Read(make([]byte, 1)); err == nil || n != 0 {
+		t.Fatalf("idle HTTP/1.1 connection still open after %s (n=%d err=%v)", time.Since(start), n, err)
+	}
+	if time.Since(start) > 3*time.Second {
+		t.Errorf("idle connection closed only after %s", time.Since(start))
+	}
+
+	tr := http.DefaultTransport.(*http.Transport).Clone()
+	tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // self-signed
+	client := &http.Client{Transport: tr}
+	get := func() (reused bool, proto string) {
+		var info httptrace.GotConnInfo
+		ctx := httptrace.WithClientTrace(context.Background(), &httptrace.ClientTrace{GotConn: func(i httptrace.GotConnInfo) { info = i }})
+		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://"+addr.String()+server.ConfigPath, nil)
+		res, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = io.Copy(io.Discard, res.Body)
+		_ = res.Body.Close()
+		return info.Reused, res.Proto
+	}
+	if _, proto := get(); proto != "HTTP/2.0" {
+		t.Fatalf("proto %s", proto)
+	}
+	if reused, _ := get(); !reused {
+		t.Fatal("back-to-back request did not reuse the HTTP/2 connection")
+	}
+	time.Sleep(time.Second)
+	if reused, _ := get(); reused {
+		t.Error("HTTP/2 connection reused after the idle timeout")
 	}
 }
 

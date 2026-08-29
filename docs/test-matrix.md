@@ -156,7 +156,7 @@ directory relative to the repo root; `.` is the library.
 | Limits (client) | Budget exhausted mid-run ends with a flagged flow_error, not a hang | . | TestBudgetExhaustedMidRunIsGraceful |
 | Limits (client) | Run completes under a server connection cap | . | TestConnectionCapDoesNotBreakRun |
 | `--auth-token` | Flag and `NQ_AUTH_TOKEN`; 401 exits 1 | cmd/nq | TestAuthTokenFlagAndEnv |
-| Edge flags | Duration shorter than interval; invalid sizes/durations are usage errors; zero flows/probes mean defaults | cmd/nq | TestEdgeFlags |
+| Edge flags | Duration shorter than interval: terminates with `duration_cap`, zero intervals, throughput falling back to the phase mean; invalid sizes/durations are usage errors; zero flows/probes mean defaults | cmd/nq | TestEdgeFlags |
 | Signed URLs | Fixed test vector; empty key, no path, oversized subject rejected | server | TestSignURLVector |
 | Signed URLs | Verify table: order, extra params, rotation, leeway, expiry, max TTL, wrong key, tampered path/sub/exp, malformed, padded/standard base64, percent-encoded path, duplicate params, exp zero/negative/overflow/now, reserved characters in `sub` | server | TestVerifySignature |
 | Signed URLs | Anonymous server ignores signatures | server | TestHandlerAnonymousServerAcceptsSignedURLs |

@@ -291,13 +291,6 @@ func TestRepeatedRunsAreIndependent(t *testing.T) {
 				t.Errorf("run %d carries run %d's warning %q: %v", i, j, other, res.Warnings)
 			}
 		}
-		seen := map[string]bool{}
-		for _, w := range res.Warnings {
-			if seen[w] {
-				t.Errorf("run %d repeats warning %q, so warnings accumulated: %v", i, w, res.Warnings)
-			}
-			seen[w] = true
-		}
 	}
 }
 

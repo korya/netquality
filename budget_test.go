@@ -35,15 +35,19 @@ func TestByteCounterLimits(t *testing.T) {
 // time only and never reports bytes_cap in either direction. Proving the cap
 // is really gone cannot use an absolute byte floor (CI loopback under -race
 // runs at a few hundred Mbps), so it is relative: the same run with a small
-// explicit cap must move far less than the uncapped one.
+// explicit cap must move far less than the uncapped one. The uncapped run is
+// kept from converging so that it spends the whole budget; otherwise a
+// loopback that stabilises in a few intervals moves too little to compare.
 func TestNoByteCapByDefault(t *testing.T) {
 	target, client := newTestServer(t, server.Options{})
 	const smallCap = 16 << 20 // small enough that even a slow CI loopback dwarfs it
 	for _, dir := range []Directions{Download, Upload} {
 		t.Run(dir.String(), func(t *testing.T) {
 			run := func(maxBytes int64) *DirectionResult {
+				p := fastStability()
+				p.StdDevTolerance = 1e-9 // never stable: time is the only limit
 				res, err := Run(context.Background(), target, Options{HTTPClient: client, Directions: dir, IdleProbes: -1,
-					MaxDuration: 2 * time.Second, MaxBytes: maxBytes, Stability: fastStability()})
+					MaxDuration: 2 * time.Second, MaxBytes: maxBytes, Stability: p})
 				if err != nil {
 					t.Fatal(err)
 				}

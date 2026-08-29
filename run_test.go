@@ -207,6 +207,7 @@ func TestMaxFlowsWithFakeClock(t *testing.T) {
 	fc := newFakeClock()
 	p := fastStability()
 	p.StdDevTolerance = 1e-9
+	p.RampGainTolerance = -1 // ramp to the cap regardless of gain
 	done := make(chan *Result)
 	go func() {
 		res, _ := Run(context.Background(), target, Options{

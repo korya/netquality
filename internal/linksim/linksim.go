@@ -60,6 +60,11 @@ type Outcome struct {
 	TrueLoadedRTT time.Duration
 	// MovingAverages is the engine's goodput estimate after each interval.
 	MovingAverages []float64
+	// Decisions is the engine's decision after each interval.
+	Decisions []engine.Decision
+	// Capacities is the capacity in force at the end of each interval, so an
+	// oracle can compare a windowed figure with the truth of its window.
+	Capacities []float64
 }
 
 const dt = 10 * time.Millisecond
@@ -170,6 +175,8 @@ func Run(link Link, p engine.StabilityParams, maxFlows int, budget Budget) Outco
 			d := eng.Interval(engine.Observation{Elapsed: now - lastTick, Bytes: int64(bytes), Flows: len(flows), Foreign: curF, Self: curS})
 			curF, curS = nil, nil
 			out.MovingAverages = append(out.MovingAverages, d.ThroughputBPS)
+			out.Capacities = append(out.Capacities, capacity)
+			out.Decisions = append(out.Decisions, d)
 			lastTick = now
 			nextTick = now + p.Interval + jitter(rng, link.TickJitter)
 			if d.Stop {

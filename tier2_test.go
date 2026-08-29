@@ -42,7 +42,8 @@ func TestIPv6Loopback(t *testing.T) {
 func TestFullRampToMaxFlows(t *testing.T) {
 	target, client := newTestServer(t, server.Options{})
 	p := fastStability()
-	p.StdDevTolerance = 1e-9 // never stable: ramp all the way
+	p.StdDevTolerance = 1e-9 // never stable
+	p.RampGainTolerance = -1 // ramp all the way regardless of gain
 	var maxSeen int
 	res, err := RunWithEvents(context.Background(), target, Options{
 		HTTPClient: client, Directions: Download, IdleProbes: -1, MaxFlows: DefaultMaxFlows,
@@ -58,8 +59,8 @@ func TestFullRampToMaxFlows(t *testing.T) {
 	if res.Download.Flows != DefaultMaxFlows || maxSeen != DefaultMaxFlows {
 		t.Errorf("flows=%d maxSeen=%d, want exactly %d", res.Download.Flows, maxSeen, DefaultMaxFlows)
 	}
-	if res.Download.Intervals < DefaultMaxFlows {
-		t.Errorf("only %d intervals; the ramp needs %d to reach the cap", res.Download.Intervals, DefaultMaxFlows)
+	if res.Download.Intervals < 5 {
+		t.Errorf("only %d intervals; the doubling ramp needs 5 to reach %d flows", res.Download.Intervals, DefaultMaxFlows)
 	}
 }
 

@@ -77,12 +77,24 @@ func TestSoak(t *testing.T) {
 					fmt.Printf("%-30s iter %2d  goroutines %3d (%+d)  heapInuse %6.2fMiB (%+.2f)\n", sc.name, i+1, g, g-g0, float64(h)/1048576, float64(int64(h)-int64(h0))/1048576)
 				}
 			}
-			g1, h1 := sample()
-			if g1-g0 > 5 {
-				t.Errorf("goroutines grew %d -> %d over %d runs", g0, g1, iters)
-			}
-			if h1 > h0+4<<20 {
-				t.Errorf("heap grew %d -> %d over %d runs", h0, h1, iters)
+			// Poll for the plateau rather than demanding it at one instant. The
+			// counts include the in-process server's per-connection goroutines,
+			// and the client aborts its flows, so the server side unwinds on the
+			// kernel's schedule, not ours (INV-4 covers the client's sockets
+			// only). The leak this guards against is ~3 goroutines and ~150KiB
+			// per run, so a settled bound of +2 and +8MiB still catches it many
+			// times over.
+			var g1 int
+			var h1 uint64
+			ok := eventually(15*time.Second, func() bool {
+				g1, h1 = sample()
+				return g1-g0 <= 2 && h1 <= h0+8<<20
+			})
+			if !ok {
+				buf := make([]byte, 1<<16)
+				n := runtime.Stack(buf, true)
+				t.Errorf("no plateau over %d runs: goroutines %d -> %d, heapInuse %d -> %d\n%s",
+					iters, g0, g1, h0, h1, buf[:n])
 			}
 		})
 	}

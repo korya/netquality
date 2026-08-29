@@ -184,6 +184,7 @@ than describe a feature. Goldens are regenerated deliberately with
 | Guard | Scenario | Package | Test |
 |---|---|---|---|
 | INV-4 | Eight mixed runs (download, upload, cancelled) leave no goroutine and no open client socket behind, checked the instant `Run` returns; with `DialContext` and with `DialTLSContext` | . | TestNoLeaksAcrossRuns |
+| INV-4 | 40-run soak per scenario (completed, cancelled, custom TLS dialer without idle timeout): goroutine count and post-GC `HeapInuse` plateau; skipped under `-short` | . | TestSoak |
 | Wire contract | Identity encoding on every request, octet-stream POST uploads, GET elsewhere, fresh connection per idle/foreign probe, self probes on load connections | . | TestWireContract |
 | No global state | Differently configured runs in one process do not influence each other; each result's warnings name its own budget and no other run's | . | TestRepeatedRunsAreIndependent |
 | INV-7 | Every JSON path and kind of `Result` pinned in `testdata/result_schema.txt`; snake_case enforced | . | TestResultSchemaGolden |

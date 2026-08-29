@@ -105,11 +105,23 @@ type ownedTransport struct {
 	*http.Transport
 	mu    sync.Mutex
 	conns map[net.Conn]struct{}
+	// closed latches at teardown. net/http dials in a goroutine that outlives
+	// the cancelled request that started it, so a dial can still complete after
+	// closeAll has taken its snapshot; that connection would otherwise be filed
+	// in a map nobody reads again and stay open for ever. Closing it on arrival
+	// costs six lines. In practice the abandoned dial is cancelled with the
+	// phase and never gets this far — this was not observed firing.
+	closed bool
 }
 
 func (o *ownedTransport) track(c net.Conn) net.Conn {
 	tc := &trackedConn{Conn: c, owner: o}
 	o.mu.Lock()
+	if o.closed {
+		o.mu.Unlock()
+		_ = tc.Close()
+		return tc
+	}
 	o.conns[tc] = struct{}{}
 	o.mu.Unlock()
 	return tc
@@ -121,6 +133,11 @@ func (o *ownedTransport) track(c net.Conn) net.Conn {
 // closeAll, which is bounded by the dials of one run.
 func (o *ownedTransport) trackRaw(c net.Conn) net.Conn {
 	o.mu.Lock()
+	if o.closed {
+		o.mu.Unlock()
+		_ = c.Close()
+		return c
+	}
 	o.conns[c] = struct{}{}
 	o.mu.Unlock()
 	return c
@@ -137,6 +154,7 @@ func (o *ownedTransport) forget(c net.Conn) {
 func (o *ownedTransport) closeAll() {
 	o.CloseIdleConnections()
 	o.mu.Lock()
+	o.closed = true
 	conns := make([]net.Conn, 0, len(o.conns))
 	for c := range o.conns {
 		conns = append(conns, c)

@@ -140,12 +140,20 @@ func TestNoLeaksAcrossRuns(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		client func() (*http.Client, *countingDialer)
-	}{{"DialContext", countingClient}, {"DialTLSContext", countingTLSClient}} {
-		t.Run(tc.name, func(t *testing.T) { testNoLeaksAcrossRuns(t, tc.client) })
+		settle bool
+	}{{"DialContext", countingClient, false}, {"DialTLSContext", countingTLSClient, true}} {
+		t.Run(tc.name, func(t *testing.T) { testNoLeaksAcrossRuns(t, tc.client, tc.settle) })
 	}
 }
 
-func testNoLeaksAcrossRuns(t *testing.T, newClient func() (*http.Client, *countingDialer)) {
+// settle allows the sockets to reach zero shortly after Run returns instead of
+// at the instant it does. It is set for a caller-supplied TLS dialer: net/http
+// dials in a goroutine that outlives the cancelled request that started it, so
+// when a phase ends, that goroutine can still be inside the caller's dialer,
+// handshaking a socket the library has not been given and cannot close. What
+// the library owes is that such a connection dies the moment it is handed over
+// (ownedTransport.closed), never that it was never opened.
+func testNoLeaksAcrossRuns(t *testing.T, newClient func() (*http.Client, *countingDialer), settle bool) {
 	srv, _ := startCountingServer(t, nil)
 	target := Target{ConfigURL: srv.URL + server.ConfigPath}
 	client, dialer := newClient()
@@ -178,8 +186,12 @@ func testNoLeaksAcrossRuns(t *testing.T, newClient func() (*http.Client, *counti
 			t.Fatalf("run %d: %v", i, err)
 		}
 		// INV-4 is a promise about the moment Run returns, so check it then —
-		// not after a grace period.
-		if n := dialer.open.Load(); n != 0 {
+		// not after a grace period (see settle for the one exception).
+		if settle {
+			if !eventually(3*time.Second, func() bool { return dialer.open.Load() == 0 }) {
+				t.Fatalf("run %d: %d sockets still open after Run returned", i, dialer.open.Load())
+			}
+		} else if n := dialer.open.Load(); n != 0 {
 			t.Fatalf("run %d: %d sockets still open when Run returned", i, n)
 		}
 	}

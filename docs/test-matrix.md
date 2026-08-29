@@ -35,6 +35,11 @@ directory relative to the repo root; `.` is the library.
 | Statistics | Real run: 5 idle probes → p80 only, 20 → p95 not p99; loaded sets at the default probe rate carry p80–p99, monotonic | . | TestPercentilesEndToEnd |
 | Statistics | Percentile and single-sided trimmed mean | internal/engine | TestPercentileAndTrimmedMean |
 | Statistics | Stage medians only from staged samples | internal/engine | TestComputeLatencyStatsStages |
+| Probe clock | Resolves no coarser than `time.Now`, finer than 1 ms, and reports what it observed | . | TestProbeClockResolves |
+| Probe clock | Readings never go backwards | . | TestProbeClockMonotonic |
+| Probe clock | A coarse clock is warned about, and the numbers are kept | . | TestCoarseClockWarns |
+| Probe clock | A tick-quantised clock wrecks jitter, median and p95 but not the mean | internal/engine | TestCoarseClockDistortsStatistics |
+| Probe clock | A sub-tick probe collapses the trimmed mean, and RPM to 0 rather than infinity | internal/engine | TestCoarseClockCollapsesSubTickRPM |
 
 ## Load phases
 

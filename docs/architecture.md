@@ -57,6 +57,7 @@ real protocol in-process over TLS + HTTP/2 without a network.
 | Choice | Reason |
 |---|---|
 | Go, stdlib only, no CGO | Cross-compiles for six OS/arch targets and imposes no build toolchain on importers, which matters because the library is embedded in third-party programs (Apache-2.0, INV-5/INV-8). |
+| Platform-specific files where a platform default would corrupt a measurement | `clock_windows.go` reads `QueryPerformanceCounter` because Go's `time.Now` on Windows resolves only to the system timer tick (LAT-10). Such a file carries a build tag, cites the spec clause that justifies it, and has a test that fails if the workaround is silently lost. `GOOS=windows` vet and lint run in CI, because the lint job's own `GOOS` cannot see these files. |
 | `net/http` + `httptrace` rather than raw sockets | Gets HTTP/2, ALPN, proxies, and per-stage timings for free; TCP RTT via `TCP_INFO` is not portable. |
 | In-process `httptest` + `server.Handler` for tests | Real TLS/HTTP/2 end to end on all three CI OSes; no mocks. |
 | `docs/test-matrix.md` enforced by `TestMatrix` | Coverage of use cases is a document, gated in both directions, instead of a percentage. |

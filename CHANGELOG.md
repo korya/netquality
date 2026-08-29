@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Fixed
+- **Windows latency figures are no longer quantised to the system timer tick.**
+  Go's `time.Now` takes its monotonic reading from `_INTERRUPT_TIME`, which
+  advances only every 0.5–15.625 ms depending on what else is running on the
+  machine, so probe durations — tens of microseconds on a fast path — measured
+  either 0 or a whole tick. Means survived that, which is why `rpm` looked
+  plausible, but jitter was overstated by roughly 7×, the median snapped to a
+  tick boundary and `p95` was tens of percent high; a probe shorter than a tick
+  could collapse `self_rpm` to 0 entirely. Probe timings now read
+  `QueryPerformanceCounter`, as Go's own `testing` package does for benchmarks
+  (LAT-10). Other platforms are unchanged. If the high-resolution counter
+  cannot be reached the run says so in `warnings` rather than presenting coarse
+  numbers as exact.
 - `rpm` and `loaded.*` are computed over every probe sample since throughput
   became stable (reported as `loaded_window`), not only the last four
   intervals, so a sparse foreign series is no longer omitted as if no

@@ -94,6 +94,12 @@ func (r *runner) run(ctx context.Context, t Target) (*Result, error) {
 		}
 	}
 
+	if !r.opts.clock.HighResolution() {
+		// The numbers are still reported: they were measured, just coarsely,
+		// and omitting them would claim they were not (RES-2, INV-3).
+		r.warn("high-resolution timer unavailable; probe latencies are quantised to the system clock, so jitter and percentiles may be misleading")
+	}
+
 	r.emit(Event{Kind: EventPhase, Phase: "discover", Message: t.ConfigURL})
 	cfg, err := r.discover(ctx, t)
 	if err != nil {
@@ -227,7 +233,7 @@ func (r *runner) idle(ctx context.Context) (*LatencyStats, error) {
 		if ctx.Err() != nil {
 			break
 		}
-		s, err := foreignProbe(ctx, rt, r.cfg.SmallDownloadURL, r.opts.Header, r.opts.clock.Now, r.observeTLS)
+		s, err := foreignProbe(ctx, rt, r.cfg.SmallDownloadURL, r.opts.Header, r.opts.clock.Mono, r.observeTLS)
 		if err != nil {
 			lastErr = err
 			continue
@@ -571,10 +577,10 @@ func (r *runner) probeLoop(ctx context.Context, p *phaseState) {
 					return // cannot multiplex on HTTP/1.1
 				}
 				p.bytes.addProbe(selfProbeBytes)
-				s, err = selfProbe(ctx, f.rt, r.cfg.SmallDownloadURL, r.opts.Header, r.opts.clock.Now)
+				s, err = selfProbe(ctx, f.rt, r.cfg.SmallDownloadURL, r.opts.Header, r.opts.clock.Mono)
 			} else {
 				p.bytes.addProbe(foreignProbeBytes)
-				s, err = foreignProbe(ctx, foreignRT, r.cfg.SmallDownloadURL, r.opts.Header, r.opts.clock.Now, r.observeTLS)
+				s, err = foreignProbe(ctx, foreignRT, r.cfg.SmallDownloadURL, r.opts.Header, r.opts.clock.Mono, r.observeTLS)
 			}
 			if err != nil {
 				if ctx.Err() == nil {

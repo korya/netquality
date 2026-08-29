@@ -130,8 +130,15 @@ func (o Options) withDefaults() Options {
 }
 
 // clock abstracts time for tests.
+//
+// Now is the wall clock: timestamps that reach a Result, and durations long
+// enough that a millisecond of quantisation is irrelevant. Mono is the clock
+// probe timings are measured with, which on Windows is a different one
+// (LAT-10).
 type clock interface {
 	Now() time.Time
+	Mono() instant
+	HighResolution() bool
 	NewTicker(d time.Duration) ticker
 	After(d time.Duration) <-chan time.Time
 }
@@ -144,6 +151,8 @@ type ticker interface {
 type realClock struct{}
 
 func (realClock) Now() time.Time                         { return time.Now() }
+func (realClock) Mono() instant                          { return monoNow() }
+func (realClock) HighResolution() bool                   { return monoHighResolution() }
 func (realClock) NewTicker(d time.Duration) ticker       { return realTicker{time.NewTicker(d)} }
 func (realClock) After(d time.Duration) <-chan time.Time { return time.After(d) }
 

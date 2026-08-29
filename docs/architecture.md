@@ -4,6 +4,11 @@
 IETF responsiveness test, two thin binaries on top of it, and a reference
 server package used by one of the binaries and by the tests.
 
+Windows, macOS and Linux (amd64 and arm64) are supported measurement targets.
+"Supported" means the numbers are trustworthy there, not just that the code
+compiles — where a platform default would distort a measurement, the library
+works around it rather than inheriting it.
+
 ## Layers
 
 ```
@@ -51,7 +56,7 @@ real protocol in-process over TLS + HTTP/2 without a network.
 
 | Choice | Reason |
 |---|---|
-| Go, stdlib only, no CGO | Cross-compiles for six OS/arch targets; imported by a proprietary agent (Apache-2.0, INV-5/INV-8). |
+| Go, stdlib only, no CGO | Cross-compiles for six OS/arch targets and imposes no build toolchain on importers, which matters because the library is embedded in third-party programs (Apache-2.0, INV-5/INV-8). |
 | `net/http` + `httptrace` rather than raw sockets | Gets HTTP/2, ALPN, proxies, and per-stage timings for free; TCP RTT via `TCP_INFO` is not portable. |
 | In-process `httptest` + `server.Handler` for tests | Real TLS/HTTP/2 end to end on all three CI OSes; no mocks. |
 | `docs/test-matrix.md` enforced by `TestMatrix` | Coverage of use cases is a document, gated in both directions, instead of a percentage. |
@@ -61,7 +66,7 @@ real protocol in-process over TLS + HTTP/2 without a network.
 
 No HTTP/3 (draft says MAY; needs `quic-go`), no packet loss (TURN/UDP), no
 PAC evaluation, no interface-name resolution for `local_ips`, no scheduling or
-persistence — the consuming agent owns those.
+persistence — the consuming application owns those.
 
 ## Possible future paths
 

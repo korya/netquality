@@ -113,13 +113,42 @@ func eventually(d time.Duration, cond func() bool) bool {
 	return cond()
 }
 
+// countingTLSClient is countingClient with the sockets opened through
+// DialTLSContext, which net/http uses instead of DialContext for https.
+func countingTLSClient() (*http.Client, *countingDialer) {
+	d := &countingDialer{inner: net.Dialer{Timeout: 10 * time.Second}}
+	tr := &http.Transport{ForceAttemptHTTP2: true} // IdleConnTimeout 0: idle conns never expire on their own
+	tr.DialTLSContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		raw, err := d.DialContext(ctx, network, addr)
+		if err != nil {
+			return nil, err
+		}
+		tc := tls.Client(raw, &tls.Config{InsecureSkipVerify: true, NextProtos: []string{"h2", "http/1.1"}}) //nolint:gosec // test server
+		if err := tc.HandshakeContext(ctx); err != nil {
+			_ = raw.Close()
+			return nil, err
+		}
+		return tc, nil
+	}
+	return &http.Client{Transport: tr}, d
+}
+
 // TestNoLeaksAcrossRuns guards INV-4: after Run returns, no goroutine it
 // started survives and every connection it opened is closed — measured over
 // repeated runs in one process, the way an agent uses the library.
 func TestNoLeaksAcrossRuns(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		client func() (*http.Client, *countingDialer)
+	}{{"DialContext", countingClient}, {"DialTLSContext", countingTLSClient}} {
+		t.Run(tc.name, func(t *testing.T) { testNoLeaksAcrossRuns(t, tc.client) })
+	}
+}
+
+func testNoLeaksAcrossRuns(t *testing.T, newClient func() (*http.Client, *countingDialer)) {
 	srv, _ := startCountingServer(t, nil)
 	target := Target{ConfigURL: srv.URL + server.ConfigPath}
-	client, dialer := countingClient()
+	client, dialer := newClient()
 	opts := Options{HTTPClient: client, IdleProbes: 2, MaxFlows: 6,
 		MaxDuration: 300 * time.Millisecond, MaxBytes: 1 << 40, Stability: fastStability()}
 

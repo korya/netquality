@@ -21,6 +21,7 @@ directory relative to the repo root; `.` is the library.
 | Discovery over HTTPS | `ConfigTimeout` bounds a slow server; 429 is reported | . | TestConfigTimeoutAndStatus |
 | test_endpoint | Dial override honoured (URLs name an unresolvable host) | . | TestTestEndpointHonoured |
 | test_endpoint | Ignored under an explicit proxy, with warning | . | TestExplicitProxyDetected |
+| test_endpoint | Ignored with a custom TLS dialer, with warning; HTTP/2 kept | . | TestTestEndpointCustomTLSDialer |
 
 ## Idle latency
 
@@ -182,7 +183,7 @@ than describe a feature. Goldens are regenerated deliberately with
 
 | Guard | Scenario | Package | Test |
 |---|---|---|---|
-| INV-4 | Eight mixed runs (download, upload, cancelled) leave no goroutine and no open client socket behind, checked the instant `Run` returns | . | TestNoLeaksAcrossRuns |
+| INV-4 | Eight mixed runs (download, upload, cancelled) leave no goroutine and no open client socket behind, checked the instant `Run` returns; with `DialContext` and with `DialTLSContext` | . | TestNoLeaksAcrossRuns |
 | Wire contract | Identity encoding on every request, octet-stream POST uploads, GET elsewhere, fresh connection per idle/foreign probe, self probes on load connections | . | TestWireContract |
 | No global state | Differently configured runs in one process do not influence each other; each result's warnings name its own budget and no other run's | . | TestRepeatedRunsAreIndependent |
 | INV-7 | Every JSON path and kind of `Result` pinned in `testdata/result_schema.txt`; snake_case enforced | . | TestResultSchemaGolden |

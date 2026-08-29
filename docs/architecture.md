@@ -46,7 +46,7 @@ real protocol in-process over TLS + HTTP/2 without a network.
 |---|---|
 | One `*http.Transport` per load flow | Each flow is its own TCP/TLS connection (draft requirement); self probes multiplex onto it via HTTP/2. A user-supplied non-`*http.Transport` cannot be cloned, so flows may share connections and the library warns. |
 | Fresh connection per foreign/idle probe | `DisableKeepAlives` on a dedicated transport; `httptrace` supplies DNS/connect/TLS/TTFB stages. |
-| `DialContext` wrapper sees every connection | It implements `test_endpoint`, records remote/local IPs, and is bypassed by user `DialTLSContext` or custom `RoundTripper`s (documented limitation). |
+| The dial wrappers see every connection | `DialContext` implements `test_endpoint` and records remote/local IPs. A user `DialTLSContext`/`DialTLS` bypasses it for https, so it is wrapped too: its connections are tracked for teardown and recorded, but not redirected to `test_endpoint` (DISC-9). A custom `RoundTripper` is opaque (documented limitation). |
 | The engine is pure | `internal/engine` sees only `Observation`s (elapsed, bytes, flows, probe samples) and returns `Decision`s; it holds no clock, goroutine, or socket, so the same code runs against real transports and, in tests, against recorded series or a simulator. Public latency/confidence types are aliases of engine types. The interval loop in `run.go` is driven by an injectable clock. |
 | Cancellation via context only | Flows read bodies until the context ends; the upload body reader stops on context; no goroutine outlives `Run` (INV-4). |
 | Byte accounting is client-side | Upload bytes are counted when handed to the transport, so a few MB of HTTP/2 flow-control window may be in flight beyond `MaxBytes`. |

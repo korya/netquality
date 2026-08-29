@@ -23,6 +23,7 @@ type transportFactory struct {
 	urlHost      string // host[:port] from the config URLs
 	urlHostPort  string // urlHost with the scheme's default port filled in
 	dialTimeout  time.Duration
+	customTLS    bool    // the base transport has DialTLSContext/DialTLS
 	remote       addrSet // server IPs the flows connected to
 	local        addrSet // source IPs the flows went out on
 }
@@ -80,6 +81,7 @@ func newTransportFactory(client *http.Client, cfg *ServerConfig, u *url.URL) (*t
 	}
 	if t, ok := rt.(*http.Transport); ok {
 		f.base = t
+		f.customTLS = t.DialTLSContext != nil || t.DialTLS != nil //nolint:staticcheck // DialTLS is deprecated but still honoured by net/http
 	} else {
 		f.custom = rt
 		warnings = append(warnings, "custom RoundTripper in use: load flows may share connections, probes may reuse connections (no per-stage timings), test_endpoint is ignored")
@@ -111,6 +113,17 @@ func (o *ownedTransport) track(c net.Conn) net.Conn {
 	o.conns[tc] = struct{}{}
 	o.mu.Unlock()
 	return tc
+}
+
+// trackRaw registers c without wrapping it. net/http only upgrades to HTTP/2
+// when the dialled value is exactly a *tls.Conn, so connections from a
+// caller's DialTLSContext cannot be wrapped; they stay in the map until
+// closeAll, which is bounded by the dials of one run.
+func (o *ownedTransport) trackRaw(c net.Conn) net.Conn {
+	o.mu.Lock()
+	o.conns[c] = struct{}{}
+	o.mu.Unlock()
+	return c
 }
 
 func (o *ownedTransport) forget(c net.Conn) {
@@ -189,6 +202,30 @@ func (f *transportFactory) newTransport(keepAlive bool) http.RoundTripper {
 			f.local.add(hostOnly(la.String()))
 		}
 		return owned.track(c), nil
+	}
+	if f.customTLS {
+		// A custom TLS dialer bypasses DialContext for https, so track its
+		// connections here. The address is not rewritten for test_endpoint:
+		// the caller's dialer would verify the certificate against it.
+		innerTLS := t.DialTLSContext
+		if innerTLS == nil {
+			legacy := t.DialTLS //nolint:staticcheck // deprecated but still honoured by net/http
+			innerTLS = func(_ context.Context, network, addr string) (net.Conn, error) { return legacy(network, addr) }
+		}
+		t.DialTLS = nil //nolint:staticcheck // DialTLSContext takes precedence; make that explicit
+		t.DialTLSContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+			c, err := innerTLS(ctx, network, addr)
+			if err != nil {
+				return nil, err
+			}
+			if ra := c.RemoteAddr(); ra != nil {
+				f.remote.add(hostOnly(ra.String()))
+			}
+			if la := c.LocalAddr(); la != nil {
+				f.local.add(hostOnly(la.String()))
+			}
+			return owned.trackRaw(c), nil
+		}
 	}
 	return owned
 }

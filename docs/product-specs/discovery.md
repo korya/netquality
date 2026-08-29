@@ -47,3 +47,10 @@ rejects them fails the run at discovery, before any load traffic.
 ### DISC-7: `test_endpoint` under a proxy
 When an explicit proxy is in use the override cannot be honoured; the proxy
 dials the origin, and a warning names the ignored endpoint.
+
+### DISC-9: `test_endpoint` with a custom TLS dialer
+When the caller's transport sets `DialTLSContext` (or `DialTLS`) the override
+cannot be honoured either: the caller's dialer would verify the certificate
+against the rewritten address. The dialer is called with the URLs' host, its
+connections are still tracked and torn down with the run (INV-4), and a
+warning names the ignored endpoint.

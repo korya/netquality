@@ -59,6 +59,13 @@ type Summary struct {
 	// RPMUpperBound is the responsiveness over the lower-bound window. The
 	// queue may not have been full, so it bounds the loaded RPM from above.
 	RPMUpperBound float64
+	// WindowFrom is the 1-based first interval the RPM and the Foreign/Self
+	// samples were taken from (through the last interval). PhaseForeign and
+	// PhaseSelf count the samples of the whole phase, so a caller can tell a
+	// series that never produced a sample from one whose samples all fell
+	// outside the window.
+	WindowFrom              int
+	PhaseForeign, PhaseSelf int
 }
 
 // Engine implements the draft's per-interval algorithm without any I/O or
@@ -88,6 +95,9 @@ type Engine struct {
 	beforeAdd   float64 // goodput measured before the last add
 	rampDone    bool
 	drainCredit int64 // bytes of credit to absorb in the next interval
+	// steadyFrom is the 1-based interval at which goodput became stable
+	// (reset by a change): the start of the working-conditions window.
+	steadyFrom int
 
 	// measured intervals since the last reset, for the lower bound
 	holdG   []float64
@@ -153,6 +163,7 @@ func (e *Engine) Interval(o Observation) Decision {
 		if d.Hold && e.tp.Intervals() >= e.p.MovingAverageDistance && goodput < (1-e.p.ChangeTolerance)*e.tp.Current() {
 			e.tp = NewTracker(e.p.MovingAverageDistance, e.p.StdDevTolerance)
 			e.goodputStable = false
+			e.steadyFrom = 0
 			e.holdG, e.holdIdx = nil, nil
 			e.lb = Summary{}
 		}
@@ -164,6 +175,9 @@ func (e *Engine) Interval(o Observation) Decision {
 	d.ThroughputBPS = e.tp.Current()
 	if !e.goodputStable && e.tp.Stable() {
 		e.goodputStable = true
+		if e.steadyFrom == 0 {
+			e.steadyFrom = e.intervals
+		}
 	}
 	d.ThroughputStable = e.goodputStable
 	// Responsiveness is tracked under working conditions: once the ramp has
@@ -280,14 +294,32 @@ func (e *Engine) Summary(currentForeign, currentSelf []LatencySample) Summary {
 	if !e.goodputStable {
 		s.ResponsivenessConfidence = ConfidenceLow
 	}
-	f, sl := e.window(e.p.MovingAverageDistance)
+	// Working-conditions window: every sample since goodput became stable,
+	// so a sparse series keeps all the samples that qualify instead of only
+	// those of the last few intervals. Without stability there is no steady
+	// state to point at, so the draft's trailing window stands.
+	// It only ever widens the draft's window: the trailing MAD intervals are
+	// the floor even when stability arrived on the final tick.
+	from := max(e.intervals-e.p.MovingAverageDistance+1, 1)
+	if e.goodputStable && e.steadyFrom > 0 && e.steadyFrom < from {
+		from = e.steadyFrom
+	}
+	f, sl := e.window(e.intervals - from + 1)
+	s.WindowFrom = from
 	if len(f)+len(sl) == 0 {
 		f, sl = e.window(len(e.foreign))
 		f = append(f, currentForeign...)
 		sl = append(sl, currentSelf...)
+		s.WindowFrom = 1
 	}
 	s.RPM, s.ForeignRPM, s.SelfRPM = Responsiveness(f, sl, e.p.TrimmedMeanPercent)
 	s.Foreign, s.Self = f, sl
+	for i := range e.foreign {
+		s.PhaseForeign += len(e.foreign[i])
+		s.PhaseSelf += len(e.self[i])
+	}
+	s.PhaseForeign += len(currentForeign)
+	s.PhaseSelf += len(currentSelf)
 	s.LowerBoundBPS, s.LowerBoundStart, s.LowerBoundIntervals = e.lb.LowerBoundBPS, e.lb.LowerBoundStart, e.lb.LowerBoundIntervals
 	s.RPMUpperBound = e.lb.RPMUpperBound
 	return s

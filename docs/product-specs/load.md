@@ -61,6 +61,13 @@ samples; it is stable when the standard deviation of the last
 `MovingAverageDistance` such values is below `StdDevTolerance` of the latest.
 The phase ends early only when throughput and responsiveness are both stable.
 
+### LOAD-14: Working-conditions window
+The reported `rpm` and `loaded` statistics use every probe sample since the
+interval throughput became stable (restarted by a goodput drop, LOAD-4), and
+never fewer than the last `MovingAverageDistance` intervals; the window is
+reported as `loaded_window`. A probe series with samples in the phase but
+none in the window is omitted from `loaded` and named in a warning.
+
 ### LOAD-6: RPM formula
 `foreign_rpm = 60000 / mean(TM(tcp), TM(tls_per_rtt), TM(http))` over foreign
 samples, or `60000 / mean(TM(tcp), TM(http))` without TLS; `self_rpm =

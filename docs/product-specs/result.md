@@ -33,8 +33,9 @@ Each direction reports direction name, `throughput_bps`, `peak_throughput_bps`,
 `mean_throughput_bps`, `bytes`, `duration_ns`, `flows`, `intervals`, stability
 booleans, confidence levels, `truncated`, `reason`, `loaded` latency
 (foreign/self/combined), `rpm`, `foreign_rpm`, `self_rpm`, `http_version`,
-`flow_errors`, and when a sustained window formed (LOAD-13)
-`throughput_lower_bound_bps`, `lower_bound_window`, `rpm_upper_bound`.
+`flow_errors`, `loaded_window` (LOAD-14), and when a sustained window formed
+(LOAD-13) `throughput_lower_bound_bps`, `lower_bound_window`,
+`rpm_upper_bound`.
 
 ### RES-5: Durations and units
 Durations are nanoseconds with an `_ns` suffix; throughput is bits per second;

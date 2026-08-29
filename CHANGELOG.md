@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Fixed
+- `rpm` and `loaded.*` are computed over every probe sample since throughput
+  became stable (reported as `loaded_window`), not only the last four
+  intervals, so a sparse foreign series is no longer omitted as if no
+  fresh-connection probe had ever succeeded; when a series has samples in
+  the phase but none in the window, a warning says so (#24).
 - `nqserver` closes idle connections (`--idle-timeout`, default 2 min) and
   pings silent HTTP/2 peers (30 s + 15 s); previously a connection whose
   client had gone quiet was held until the process exited (#24).

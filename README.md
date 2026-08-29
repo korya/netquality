@@ -233,6 +233,7 @@ telemetry.
 | Responsiveness tracking | after goodput stability | from the end of the ramp; stability judged on the windowed values, not on averages of them | Removes 3–4 s of latency from every run; the phase still ends only with both series stable. |
 | Upload byte accounting | – | intervals inflated by the HTTP/2 send window of new flows are excluded | Bytes are counted when the transport takes them; on a 20 Mbps link the 4 MiB credit otherwise reports 53 Mbps with high confidence. |
 | Capacity change | – | a > 25 % goodput drop restarts stability tracking | The draft averages across the change. |
+| Responsiveness window | last MAD intervals | every sample since throughput became stable (`loaded_window`) | Foreign probes are sparse (a TLS handshake each); a fixed 4-tick window could hold self samples and no foreign ones, which read as "no fresh connection ever succeeded". Stability is still judged on the draft's window. |
 | Probe byte accounting | – | foreign 5000 B, self 1000 B (draft's estimates) | Counted against `MaxBytes` and the 5 % capacity rule. |
 | Config `version` | must be `1` | `1` or `"1"` accepted | Lenient on the wire, strict on everything else (duplicates, hosts, scheme). |
 | Config field names | `*_download_url`, `upload_url` | also accepts Apple/Cloudflare `*_https_*` names, preferring them | Interop with deployed servers. |

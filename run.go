@@ -475,10 +475,23 @@ loop:
 	dr.Reason = p.stopReason()
 	dr.Truncated = dr.Reason != ReasonNone
 	dr.RPM, dr.ForeignRPM, dr.SelfRPM = sum.RPM, sum.ForeignRPM, sum.SelfRPM
+	if sum.Intervals > 0 {
+		dr.LoadedWindow = &IntervalWindow{
+			Start:     time.Duration(sum.WindowFrom-1) * sp.Interval,
+			Duration:  time.Duration(sum.Intervals-sum.WindowFrom+1) * sp.Interval,
+			Intervals: sum.Intervals - sum.WindowFrom + 1,
+		}
+	}
+	if len(sum.Foreign) == 0 && sum.PhaseForeign > 0 {
+		r.warn("%s: foreign probes: %d samples in the phase, none in the working-conditions window (intervals %d-%d); rpm is from self probes only", dir, sum.PhaseForeign, sum.WindowFrom, sum.Intervals)
+	}
+	if len(sum.Self) == 0 && sum.PhaseSelf > 0 {
+		r.warn("%s: self probes: %d samples in the phase, none in the working-conditions window (intervals %d-%d); rpm is from foreign probes only", dir, sum.PhaseSelf, sum.WindowFrom, sum.Intervals)
+	}
 	if sum.LowerBoundBPS > 0 {
 		dr.ThroughputLowerBoundBPS = sum.LowerBoundBPS
 		dr.RPMUpperBound = sum.RPMUpperBound
-		dr.LowerBoundWindow = &BoundWindow{
+		dr.LowerBoundWindow = &IntervalWindow{
 			Start:     time.Duration(sum.LowerBoundStart-1) * sp.Interval,
 			Duration:  time.Duration(sum.LowerBoundIntervals) * sp.Interval,
 			Intervals: sum.LowerBoundIntervals,

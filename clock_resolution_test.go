@@ -2,6 +2,7 @@ package netquality
 
 import (
 	"context"
+	"runtime"
 	"testing"
 	"time"
 
@@ -28,14 +29,13 @@ func observedResolution(read func() time.Duration, budget time.Duration) (time.D
 // TestProbeClockResolves guards LAT-10: the clock probe timings are measured
 // with must resolve finely enough to see a probe.
 //
-// The assertion is deliberately relative rather than an absolute bound in
-// nanoseconds. An absolute bound would only swap one environment-sensitive
-// implementation for an environment-sensitive test — the Windows tick is 0.5 to
-// 15.625 ms depending on what else is running on the machine, and CI runners are
-// not obliged to hold any of that still. What must hold on every platform is
-// that the probe clock is no coarser than time.Now, and on Windows that it is
-// strictly finer, which is exactly what fails if QueryPerformanceCounter is ever
-// silently lost.
+// The bound is absolute but generous, because what observedResolution actually
+// returns is max(clock resolution, cost of the code between two readings). On a
+// nanosecond clock that is the call overhead, not the clock — which is why this
+// does not compare the probe clock against time.Now outside Windows, where the
+// two are the same clock reached through a different amount of work. A coarse
+// clock is 1 ms at best and 15.625 ms at worst, so 100 us separates the two
+// cases by more than two orders of magnitude without pinning either.
 func TestProbeClockResolves(t *testing.T) {
 	mono, monoN := observedResolution(func() time.Duration {
 		a, b := monoNow(), monoNow()
@@ -51,19 +51,27 @@ func TestProbeClockResolves(t *testing.T) {
 	t.Logf("probe clock: %v over %d positive samples (high resolution: %v)", mono, monoN, monoHighResolution())
 	t.Logf("time.Now:    %v over %d positive samples", wall, wallN)
 
-	if !monoHighResolution() {
-		t.Skip("high-resolution timer unavailable; the fallback is time.Now by design")
+	if runtime.GOOS == "windows" {
+		// The only platform where the probe clock is not time.Now. If
+		// QueryPerformanceCounter is ever silently lost the run still works,
+		// but its jitter and percentiles stop meaning anything (LAT-10), so
+		// that must be loud here rather than skipped.
+		if !monoHighResolution() {
+			t.Error("QueryPerformanceCounter unavailable: probe timings fell back to the tick-quantised system clock")
+			return
+		}
+		// Orders of magnitude apart, so call overhead cannot explain it away.
+		if wall > 0 && mono >= wall {
+			t.Errorf("probe clock (%v) is no finer than the system clock (%v); QueryPerformanceCounter is not doing anything", mono, wall)
+		}
 	}
 	if mono == 0 {
 		t.Fatal("probe clock never advanced: no two readings differed")
 	}
-	if wall > 0 && mono > wall {
-		t.Errorf("probe clock (%v) is coarser than time.Now (%v)", mono, wall)
-	}
-	// A probe is tens of microseconds; a clock that cannot resolve a
-	// millisecond cannot measure one honestly.
-	if mono >= time.Millisecond {
-		t.Errorf("probe clock resolution %v cannot time a sub-millisecond probe", mono)
+	// A probe on a fast path is tens of microseconds; a clock this coarse
+	// cannot honestly measure one.
+	if mono >= 100*time.Microsecond {
+		t.Errorf("probe clock resolution %v cannot time a probe", mono)
 	}
 }
 

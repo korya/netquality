@@ -224,7 +224,10 @@ telemetry.
 | Byte cap default | (handoff spec: 250 MB) | none | A fixed byte cap starves fast links of the intervals a confident RPM needs (≈ 8 × rate); the caller knows which networks are metered, the library cannot. |
 | Flow error | abort the test | abort the **phase**, report `reason=flow_error`, keep other results | Partial data with a flag beats none. |
 | Self probes on HTTP/1.1 | use TCP RTT estimate | omitted; RPM from foreign probes only, warning recorded | TCP_INFO is not portable in pure Go. |
-| Flow addition | every interval | every interval until `MaxFlows` | Same, with the cap. |
+| Flow addition | one per interval | **doubling** each interval while a step gains ≥ 10 % goodput, up to `MaxFlows` | Reaches saturation in ≤ 5 intervals instead of 16, so a 10 Gbps or high-RTT link still settles inside the 12 s budget; a slow link stops after one exploratory flow. |
+| Responsiveness tracking | after goodput stability | from the end of the ramp; stability judged on the windowed values, not on averages of them | Removes 3–4 s of latency from every run; the phase still ends only with both series stable. |
+| Upload byte accounting | – | intervals inflated by the HTTP/2 send window of new flows are excluded | Bytes are counted when the transport takes them; on a 20 Mbps link the 4 MiB credit otherwise reports 53 Mbps with high confidence. |
+| Capacity change | – | a > 25 % goodput drop restarts stability tracking | The draft averages across the change. |
 | Probe byte accounting | – | foreign 5000 B, self 1000 B (draft's estimates) | Counted against `MaxBytes` and the 5 % capacity rule. |
 | Config `version` | must be `1` | `1` or `"1"` accepted | Lenient on the wire, strict on everything else (duplicates, hosts, scheme). |
 | Config field names | `*_download_url`, `upload_url` | also accepts Apple/Cloudflare `*_https_*` names, preferring them | Interop with deployed servers. |

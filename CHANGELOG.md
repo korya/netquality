@@ -5,6 +5,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- **Ramp-and-hold algorithm** (#20). Flows are added in doubling steps and the
+  ramp stops when a step gains less than 10 % goodput; responsiveness is
+  tracked from the end of the ramp and judged on its windowed values; a
+  goodput drop of more than 25 % restarts goodput tracking; upload intervals
+  inflated by the HTTP/2 send window of new flows are excluded. Every
+  simulated scenario now converges with high confidence inside the 12 s
+  budget (10 Gbps at 150 ms RTT, CDN per-flow caps, shaper bursts, a
+  capacity change mid-run), links ≤ 100 Mbps finish 1–3 s sooner, and a
+  20 Mbps upload reports 20 Mbps instead of 53. New `StabilityParams`
+  fields: `SendBufferBytes`, `RampGainTolerance`, `ChangeTolerance`;
+  `DefaultUploadSendBuffer`. `FlowIncrement` is now the floor of a step.
+- Engine summaries carry a sustained lower bound on throughput and the
+  matching RPM upper bound (not yet in `Result`; see #20).
+
 ### Fixed
 - Throughput no longer measures the test's own probe traffic. The fixed
   per-probe byte estimate (5000 B foreign, 1000 B self) was added to the same

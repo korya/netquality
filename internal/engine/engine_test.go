@@ -31,8 +31,10 @@ func probeSet(i int) (foreign, self []LatencySample) {
 	return
 }
 
-// referenceLoop is the pre-extraction interval loop from run.go, kept verbatim
-// (modulo I/O) as the oracle the Engine must reproduce.
+// referenceLoop is the draft's plain interval loop (one flow per interval,
+// responsiveness after goodput stability), kept as the oracle for what the
+// Engine still shares with it: the goodput moving average, peak and
+// confidence. Ramp shape and responsiveness timing are tested separately.
 type refResult struct {
 	intervals        int
 	flows            int
@@ -149,17 +151,26 @@ func TestEngineMatchesReferenceLoop(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			want := referenceLoop(tc.bytes, tc.sp, tc.maxFlows)
 			got := runEngine(tc.bytes, tc.sp, tc.maxFlows)
-			if got.intervals != want.intervals || got.flows != want.flows || got.stoppedAt != want.stoppedAt {
-				t.Errorf("shape: got %+v want %+v", got, want)
+			// The engine may stop earlier or later (responsiveness is tracked
+			// from the end of the ramp and judged without double smoothing);
+			// while both run, the goodput series is the draft's.
+			n := got.intervals
+			if want.intervals < n {
+				n = want.intervals
 			}
-			if !feq(got.mas, want.mas) || !feq(got.rpms, want.rpms) {
-				t.Errorf("series: got mas=%v rpms=%v want mas=%v rpms=%v", got.mas, got.rpms, want.mas, want.rpms)
+			if !feq(got.mas[:n], want.mas[:n]) {
+				t.Errorf("series: got mas=%v want mas=%v", got.mas[:n], want.mas[:n])
 			}
-			if got.tStable != want.tStable || got.rStable != want.rStable || got.tConf != want.tConf || got.rConf != want.rConf {
-				t.Errorf("stability: got %v/%v %s/%s want %v/%v %s/%s", got.tStable, got.rStable, got.tConf, got.rConf, want.tStable, want.rStable, want.tConf, want.rConf)
+			if got.intervals == want.intervals && got.stoppedAt == 0 && want.stoppedAt == 0 {
+				if got.tStable != want.tStable || got.tConf != want.tConf {
+					t.Errorf("stability: got %v %s want %v %s", got.tStable, got.tConf, want.tStable, want.tConf)
+				}
+				if got.peak != want.peak || got.finalMA != want.finalMA || got.rpm != want.rpm || got.frpm != want.frpm || got.srpm != want.srpm {
+					t.Errorf("figures: got %v %v %v/%v/%v want %v %v %v/%v/%v", got.peak, got.finalMA, got.rpm, got.frpm, got.srpm, want.peak, want.finalMA, want.rpm, want.frpm, want.srpm)
+				}
 			}
-			if got.peak != want.peak || got.finalMA != want.finalMA || got.rpm != want.rpm || got.frpm != want.frpm || got.srpm != want.srpm {
-				t.Errorf("figures: got %v %v %v/%v/%v want %v %v %v/%v/%v", got.peak, got.finalMA, got.rpm, got.frpm, got.srpm, want.peak, want.finalMA, want.rpm, want.frpm, want.srpm)
+			if got.stoppedAt != 0 && (!got.tStable || !got.rStable || got.tConf != ConfidenceHigh || got.rConf != ConfidenceHigh) {
+				t.Errorf("stopped at %d without both series stable: %v/%v %s/%s", got.stoppedAt, got.tStable, got.rStable, got.tConf, got.rConf)
 			}
 			t.Logf("intervals=%d stoppedAt=%d flows=%d MA=%.0f conf=%s/%s rpm=%.0f", got.intervals, got.stoppedAt, got.flows, got.finalMA, got.tConf, got.rConf, got.rpm)
 		})

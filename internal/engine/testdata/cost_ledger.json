@@ -1,107 +1,107 @@
 {
   "bloated 1.00G": {
-    "bytes": 967419763,
-    "seconds": 8
+    "bytes": 1092419763,
+    "seconds": 9
   },
   "bloated 10.00G": {
-    "bytes": 12049631769,
-    "seconds": 10
+    "bytes": 10799631769,
+    "seconds": 9
   },
   "bloated 100.0M": {
-    "bytes": 135483770,
-    "seconds": 11
+    "bytes": 97983770,
+    "seconds": 8
   },
   "bloated 30.0M": {
-    "bytes": 40836583,
-    "seconds": 11
+    "bytes": 29586583,
+    "seconds": 8
   },
   "bloated 400.0M": {
-    "bytes": 388949508,
-    "seconds": 8
+    "bytes": 438949508,
+    "seconds": 9
   },
   "bloated 5.0M": {
-    "bytes": 6850677,
-    "seconds": 11
-  },
-  "capacity halves at 5s (200M→100M)": {
-    "bytes": 157722349,
+    "bytes": 4975677,
     "seconds": 8
   },
+  "capacity halves at 5s (200M→100M)": {
+    "bytes": 170222349,
+    "seconds": 9
+  },
   "cdn per-flow cap 200M on 1G": {
-    "bytes": 1233847652,
-    "seconds": 12
+    "bytes": 909838599,
+    "seconds": 9
   },
   "clean 1.00G rtt=10ms": {
-    "bytes": 863778750,
-    "seconds": 7
+    "bytes": 738778750,
+    "seconds": 6
   },
   "clean 1.00G rtt=150ms": {
-    "bytes": 1214778214,
-    "seconds": 11
+    "bytes": 839778214,
+    "seconds": 8
   },
   "clean 1.00G rtt=50ms": {
-    "bytes": 1196099624,
-    "seconds": 10
+    "bytes": 821099624,
+    "seconds": 7
   },
   "clean 10.00G rtt=10ms": {
     "bytes": 8595478750,
     "seconds": 7
   },
   "clean 10.00G rtt=150ms": {
-    "bytes": 12775427111,
-    "seconds": 12
+    "bytes": 9025427111,
+    "seconds": 9
   },
   "clean 10.00G rtt=50ms": {
-    "bytes": 13003358510,
-    "seconds": 11
+    "bytes": 9253358510,
+    "seconds": 8
   },
   "clean 100.0M rtt=10ms": {
-    "bytes": 86783750,
-    "seconds": 7
+    "bytes": 74283750,
+    "seconds": 6
   },
   "clean 100.0M rtt=150ms": {
-    "bytes": 127658725,
-    "seconds": 11
+    "bytes": 90158725,
+    "seconds": 8
   },
   "clean 100.0M rtt=50ms": {
-    "bytes": 96678309,
-    "seconds": 8
+    "bytes": 84178309,
+    "seconds": 7
   },
   "clean 30.0M rtt=10ms": {
-    "bytes": 26101250,
-    "seconds": 7
+    "bytes": 22351250,
+    "seconds": 6
   },
   "clean 30.0M rtt=150ms": {
-    "bytes": 39256147,
-    "seconds": 11
+    "bytes": 28006147,
+    "seconds": 8
   },
   "clean 30.0M rtt=50ms": {
-    "bytes": 29323094,
-    "seconds": 8
+    "bytes": 25573094,
+    "seconds": 7
   },
   "clean 400.0M rtt=10ms": {
-    "bytes": 346138750,
-    "seconds": 7
+    "bytes": 296138750,
+    "seconds": 6
   },
   "clean 400.0M rtt=150ms": {
-    "bytes": 495793483,
-    "seconds": 11
-  },
-  "clean 400.0M rtt=50ms": {
-    "bytes": 481738456,
-    "seconds": 10
-  },
-  "clean 5.0M rtt=10ms": {
-    "bytes": 4365000,
-    "seconds": 7
-  },
-  "clean 5.0M rtt=150ms": {
-    "bytes": 4888020,
+    "bytes": 345793483,
     "seconds": 8
   },
-  "clean 5.0M rtt=50ms": {
-    "bytes": 4335962,
+  "clean 400.0M rtt=50ms": {
+    "bytes": 331738456,
     "seconds": 7
+  },
+  "clean 5.0M rtt=10ms": {
+    "bytes": 3740000,
+    "seconds": 6
+  },
+  "clean 5.0M rtt=150ms": {
+    "bytes": 4263020,
+    "seconds": 7
+  },
+  "clean 5.0M rtt=50ms": {
+    "bytes": 3710962,
+    "seconds": 6
   },
   "metered 250MiB on 1G": {
     "bytes": 263087175,
@@ -116,15 +116,19 @@
     "seconds": 5.47
   },
   "shaper burst 20MB on 50M": {
-    "bytes": 95086000,
-    "seconds": 12
+    "bytes": 82586000,
+    "seconds": 10
   },
   "tick jitter 200ms on 100M": {
     "bytes": 93233770,
     "seconds": 7.62
   },
+  "upload send buffer 4MiB on 1G": {
+    "bytes": 994864391,
+    "seconds": 8
+  },
   "upload send buffer 4MiB on 20M": {
-    "bytes": 46553009,
-    "seconds": 7
+    "bytes": 28081489,
+    "seconds": 8
   }
 }

@@ -45,6 +45,7 @@ directory relative to the repo root; `.` is the library.
 | Stability algorithm | Draft moving-average criterion, confidence levels (table) | internal/engine | TestStabilityTracker |
 | Stability algorithm | Moving-average window arithmetic | internal/engine | TestStabilityTrackerMovingAverage |
 | Stability parameters | Defaults and partial overrides | internal/engine | TestDefaultStabilityParams |
+| Stability algorithm | Windowed series (responsiveness) judged on its values, not on averages of averages | internal/engine | TestWindowedTrackerJudgesValuesOnce |
 | Flow ramp | One flow per interval up to MaxFlows (fake clock) | . | TestMaxFlowsWithFakeClock |
 | HTTP/1.1 fallback | No self probes, RPM from foreign probes, warning | . | TestHTTP11Fallback |
 | Flow error | Failure before any interval aborts the run | . | TestFlowErrorAbortsPhase |
@@ -63,6 +64,11 @@ directory relative to the repo root; `.` is the library.
 | Engine | Per-interval decisions reproduce the pre-extraction loop on a recorded Cloudflare series and synthetic links | internal/engine | TestEngineMatchesReferenceLoop |
 | Engine | Probe spacing: 1/MPS floor, PTC stretch on slow links | internal/engine | TestEngineProbeGap |
 | Engine | Summary with no completed interval; InitialFlows capped by MaxFlows | internal/engine | TestEngineSummaryFallbacks |
+| Engine | Ramp doubles flows until a step gains < `RampGainTolerance`; negative tolerance ramps to the cap; `FlowIncrement` floors a step | internal/engine | TestRampDoublesUntilNoGain |
+| Engine | Drain interval: send-buffer credit of new flows excluded from goodput, peak and decisions; immaterial credit costs nothing | internal/engine | TestDrainIntervalExcludesSendBufferCredit |
+| Engine | Lower bound = minimum of the latest sustained window of hold intervals; none from an unstable series | internal/engine | TestLowerBoundFromSustainedHoldWindow |
+| Engine | Goodput drop beyond `ChangeTolerance` restarts tracking and the bound window | internal/engine | TestCapacityDropRestartsGoodputTracking |
+| Engine | Phase stops only with both series stable | internal/engine | TestStopNeedsBothSeriesStable |
 
 ## Safety limits
 
@@ -183,7 +189,7 @@ ledger stays exact.
 
 | Feature | Scenario | Package | Test |
 |---|---|---|---|
-| Algorithm | 5 Mbps–10 Gbps × RTT 10/50/150 ms, bufferbloat, CDN per-flow cap, shaper burst, upload send buffer, tick jitter, mid-run capacity change, metered byte caps (honest truncation) | internal/engine | TestAlgorithmScenarios |
+| Algorithm | 5 Mbps–10 Gbps × RTT 10/50/150 ms, bufferbloat, CDN per-flow cap, shaper burst, upload send buffer (20 M, 1 G), tick jitter, mid-run capacity change, metered byte caps (honest truncation); lower bound never above the capacity of its window | internal/engine | TestAlgorithmScenarios |
 | Simulator | Delivers exactly capacity, never more | internal/linksim | TestModelDeliversCapacity |
 | Simulator | Queue adds queue/capacity of latency | internal/linksim | TestModelQueueAddsLatency |
 | Simulator | Token bucket bursts then sustains capacity | internal/linksim | TestModelShaperSustainsCapacity |

@@ -46,9 +46,13 @@ const (
 	// cost is at most rate × MaxDuration per direction — so a confident
 	// result is reachable at any link speed. Callers on metered links set
 	// MaxBytes explicitly.
-	DefaultMaxBytes   = 0
-	DefaultMaxFlows   = 16
-	DefaultIdleProbes = 5
+	DefaultMaxBytes = 0
+	DefaultMaxFlows = 16
+	// DefaultUploadSendBuffer is the per-flow credit assumed for uploads: Go's
+	// HTTP/2 stream window, which the transport fills before bytes reach the
+	// wire (StabilityParams.SendBufferBytes).
+	DefaultUploadSendBuffer = 4 << 20
+	DefaultIdleProbes       = 5
 	// DefaultConfigTimeout bounds config discovery, which happens before the
 	// per-direction budgets apply.
 	DefaultConfigTimeout = 10 * time.Second
@@ -72,7 +76,9 @@ type Options struct {
 	// IdleProbes is the number of fresh-connection probes for idle latency
 	// (default 5). 0 uses the default; negative skips idle measurement.
 	IdleProbes int
-	// Stability holds the draft's algorithm parameters; zero fields use defaults.
+	// Stability holds the draft's algorithm parameters; zero fields use
+	// defaults. SendBufferBytes applies to upload phases only and defaults to
+	// DefaultUploadSendBuffer there; set it negative to disable.
 	Stability StabilityParams
 	// HTTPClient supplies the base transport (proxy, TLS config, dialer). Only
 	// its Transport is used; each load flow gets its own clone so flows do not

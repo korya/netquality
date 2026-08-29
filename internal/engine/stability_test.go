@@ -62,3 +62,22 @@ func TestDefaultStabilityParams(t *testing.T) {
 		t.Errorf("%+v", q)
 	}
 }
+
+func TestWindowedTrackerJudgesValuesOnce(t *testing.T) {
+	// Values are already MAD-interval means: a windowed tracker is stable
+	// as soon as MAD values agree, a plain one only after MAD averages do.
+	plain, win := NewTracker(4, 0.05), NewWindowedTracker(4, 0.05)
+	for _, v := range []float64{300, 200, 181, 181, 181, 181} {
+		plain.Push(v)
+		win.Push(v)
+	}
+	if !win.Stable() {
+		t.Error("windowed tracker not stable after four equal values")
+	}
+	if plain.Stable() {
+		t.Error("plain tracker stable while its averages still remember the ramp")
+	}
+	if win.Confidence() != ConfidenceHigh || plain.Confidence() != ConfidenceMedium {
+		t.Errorf("confidence %s/%s", win.Confidence(), plain.Confidence())
+	}
+}

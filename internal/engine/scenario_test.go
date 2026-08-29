@@ -47,6 +47,10 @@ type scenario struct {
 // defaults mirrors the library defaults: time is the budget, no byte cap.
 func defaults() linksim.Budget { return linksim.Budget{Duration: 12 * time.Second} }
 
+// upload mirrors what the I/O layer sets for an upload phase: the HTTP/2
+// stream window is credited per flow before the bytes reach the wire.
+func upload() engine.StabilityParams { return engine.StabilityParams{SendBufferBytes: 4 * mib} }
+
 // metered is a caller-set byte cap, as on a metered link.
 func metered() linksim.Budget { return linksim.Budget{Duration: 12 * time.Second, Bytes: 250 * mib} }
 
@@ -62,7 +66,8 @@ func scenarios() []scenario {
 	out = append(out,
 		scenario{"cdn per-flow cap 200M on 1G", linksim.Link{Capacity: 1 * gbps, RTT: 20 * time.Millisecond, PerFlowCap: 200 * mbps, Seed: 3}, defaults(), engine.StabilityParams{}, false},
 		scenario{"shaper burst 20MB on 50M", linksim.Link{Capacity: 50 * mbps, RTT: 30 * time.Millisecond, ShaperBurst: 20 * mib, Seed: 4}, defaults(), engine.StabilityParams{}, false},
-		scenario{"upload send buffer 4MiB on 20M", linksim.Link{Capacity: 20 * mbps, RTT: 40 * time.Millisecond, SendBuffer: 4 * mib, Seed: 5}, defaults(), engine.StabilityParams{}, false},
+		scenario{"upload send buffer 4MiB on 20M", linksim.Link{Capacity: 20 * mbps, RTT: 40 * time.Millisecond, SendBuffer: 4 * mib, Seed: 5}, defaults(), upload(), false},
+		scenario{"upload send buffer 4MiB on 1G", linksim.Link{Capacity: 1 * gbps, RTT: 20 * time.Millisecond, SendBuffer: 4 * mib, Seed: 11}, defaults(), upload(), false},
 		scenario{"tick jitter 200ms on 100M", linksim.Link{Capacity: 100 * mbps, RTT: 30 * time.Millisecond, TickJitter: 200 * time.Millisecond, Seed: 6}, defaults(), engine.StabilityParams{}, false},
 		scenario{"capacity halves at 5s (200M→100M)", linksim.Link{Capacity: 200 * mbps, RTT: 30 * time.Millisecond, ChangeAt: 5 * time.Second, ChangeTo: 100 * mbps, Seed: 7}, defaults(), engine.StabilityParams{}, false},
 		scenario{name: "metered 250MiB on 400M", link: linksim.Link{Capacity: 400 * mbps, RTT: 30 * time.Millisecond, Seed: 8}, budget: metered(), params: engine.StabilityParams{}, expectTruncated: true},
@@ -73,24 +78,10 @@ func scenarios() []scenario {
 }
 
 // knownFailing lists scenarios whose oracles the current algorithm does not
-// meet, with the cause. Each entry is a promise to fix, not an excuse; the
-// algorithm work removes entries as it lands (see docs/product-specs/load.md).
-var knownFailing = map[string]string{
-	// Throughput converges but the one-flow-per-interval ramp leaves too
-	// little of the 12 s budget for responsiveness to settle: slow start at
-	// 150 ms RTT, or a CDN per-flow ceiling that needs many flows. Fix: the
-	// self-priming ramp (#3, step 2).
-	"clean 10.00G rtt=150ms":      "ramp too slow for RPM to settle in 12 s (#3 step 2)",
-	"cdn per-flow cap 200M on 1G": "ramp too slow for RPM to settle in 12 s (#3 step 2)",
-	// Bytes credited to the transport before they reach the wire inflate
-	// goodput; the algorithm reports it with high confidence. Fix: sustained,
-	// buffer-corrected estimate and lower bound (#3, step 3).
-	"upload send buffer 4MiB on 20M": "send-buffer credit inflates goodput (dishonest)",
-	// A 2x burst decays over many intervals; the moving average never settles.
-	"shaper burst 20MB on 50M": "token-bucket burst delays convergence",
-	// The algorithm has no notion of a capacity change; it averages across it.
-	"capacity halves at 5s (200M→100M)": "capacity change not detected",
-}
+// meet, with the cause. Each entry is a promise to fix, not an excuse: a new
+// scenario that fails goes here with its reason and comes out when the
+// algorithm change that clears it lands (see docs/product-specs/load.md).
+var knownFailing = map[string]string{}
 
 // cost is what a scenario spent; the ledger in testdata/cost_ledger.json
 // pins it so an algorithm change that makes a run more expensive fails here
@@ -148,6 +139,24 @@ func TestAlgorithmScenarios(t *testing.T) {
 				} else {
 					t.Logf("KNOWN DISHONEST (%s): %v", knownFailing[sc.name], dishonest)
 				}
+			}
+			// Bound oracle: never known-failing. The bound must not exceed
+			// the lowest capacity in force during its window, and must be
+			// present whenever the estimate is.
+			if s.LowerBoundBPS > 0 {
+				truthLow := math.Inf(1)
+				for i := s.LowerBoundStart - 1; i < s.LowerBoundStart-1+s.LowerBoundIntervals && i < len(o.Capacities); i++ {
+					truthLow = math.Min(truthLow, o.Capacities[i])
+				}
+				if s.LowerBoundBPS > truthLow {
+					t.Errorf("BOUND: lower bound %s exceeds capacity %s over intervals %d..%d", hb(s.LowerBoundBPS), hb(truthLow), s.LowerBoundStart, s.LowerBoundStart+s.LowerBoundIntervals-1)
+				}
+				if s.LowerBoundBPS > est*1.001 {
+					t.Errorf("BOUND: lower bound %s above the estimate %s", hb(s.LowerBoundBPS), hb(est))
+				}
+				t.Logf("bound=%s over intervals %d..%d (truth there %s) rpm<=%.0f", hb(s.LowerBoundBPS), s.LowerBoundStart, s.LowerBoundStart+s.LowerBoundIntervals-1, hb(truthLow), s.RPMUpperBound)
+			} else if !o.Truncated && s.ThroughputConfidence == engine.ConfidenceHigh && s.ResponsivenessConfidence == engine.ConfidenceHigh {
+				t.Errorf("BOUND: converged but no lower bound")
 			}
 			if sc.budget.Bytes > 0 && o.Bytes > sc.budget.Bytes+16*mib {
 				t.Errorf("BUDGET: %s exceeds %s", hB(o.Bytes), hB(sc.budget.Bytes))

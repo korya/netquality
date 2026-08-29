@@ -355,6 +355,11 @@ func (p *phaseState) proto() string {
 // stability or a limit.
 func (r *runner) loadPhase(ctx context.Context, dir Directions) (*DirectionResult, error) {
 	sp := r.opts.Stability
+	if dir == Upload && sp.SendBufferBytes == 0 {
+		// Upload bytes are counted when the transport takes them, ahead of
+		// the wire by up to the HTTP/2 stream window per flow.
+		sp.SendBufferBytes = DefaultUploadSendBuffer
+	}
 	pctx, cancel := context.WithTimeout(ctx, r.opts.MaxDuration)
 	defer cancel()
 

@@ -15,8 +15,14 @@ jobs:
       - uses: actions/setup-go@v5
         with: { go-version: '1.27.0' }
       - run: go vet ./...
+      # Build-tagged files are invisible to the lint job's own GOOS, so a
+      # //go:build windows file would otherwise reach master unvetted.
+      - run: GOOS=windows go vet ./...
       - uses: golangci/golangci-lint-action@v7
         with: { version: latest }
+      - uses: golangci/golangci-lint-action@v7
+        with: { version: latest }
+        env: { GOOS: windows }
       - name: govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.7.0 ./...
   test:

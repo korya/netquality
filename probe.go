@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httptrace"
 	"sync"
-	"time"
 )
 
 // probeTimes collects httptrace timestamps. HTTP/2 invokes trace hooks from
@@ -15,7 +14,7 @@ import (
 type probeTimes struct {
 	mu                                   sync.Mutex
 	s                                    LatencySample
-	dnsStart, connStart, tlsStart, wrote time.Time
+	dnsStart, connStart, tlsStart, wrote instant
 	reused                               bool
 }
 
@@ -30,7 +29,7 @@ const (
 // foreignProbe performs a GET of the small URL on a brand-new connection and
 // records per-stage timings. rt must not reuse connections.
 // observe, if non-nil, receives the TLS state of every successful handshake.
-func foreignProbe(ctx context.Context, rt http.RoundTripper, url string, extra http.Header, now func() time.Time, observe func(tls.ConnectionState)) (LatencySample, error) {
+func foreignProbe(ctx context.Context, rt http.RoundTripper, url string, extra http.Header, now func() instant, observe func(tls.ConnectionState)) (LatencySample, error) {
 	pt := &probeTimes{}
 	start := now()
 	lock := func(f func()) { pt.mu.Lock(); defer pt.mu.Unlock(); f() }
@@ -38,30 +37,30 @@ func foreignProbe(ctx context.Context, rt http.RoundTripper, url string, extra h
 		DNSStart: func(httptrace.DNSStartInfo) { lock(func() { pt.dnsStart = now() }) },
 		DNSDone: func(httptrace.DNSDoneInfo) {
 			lock(func() {
-				if !pt.dnsStart.IsZero() {
-					pt.s.DNS = now().Sub(pt.dnsStart)
+				if !pt.dnsStart.isZero() {
+					pt.s.DNS = now().sub(pt.dnsStart)
 				}
 			})
 		},
 		ConnectStart: func(_, _ string) {
 			lock(func() {
-				if pt.connStart.IsZero() {
+				if pt.connStart.isZero() {
 					pt.connStart = now()
 				}
 			})
 		},
 		ConnectDone: func(_, _ string, err error) {
 			lock(func() {
-				if err == nil && !pt.connStart.IsZero() && pt.s.Connect == 0 {
-					pt.s.Connect = now().Sub(pt.connStart)
+				if err == nil && !pt.connStart.isZero() && pt.s.Connect == 0 {
+					pt.s.Connect = now().sub(pt.connStart)
 				}
 			})
 		},
 		TLSHandshakeStart: func() { lock(func() { pt.tlsStart = now() }) },
 		TLSHandshakeDone: func(cs tls.ConnectionState, err error) {
 			lock(func() {
-				if err == nil && !pt.tlsStart.IsZero() {
-					pt.s.TLS = now().Sub(pt.tlsStart)
+				if err == nil && !pt.tlsStart.isZero() {
+					pt.s.TLS = now().sub(pt.tlsStart)
 					pt.s.TLSRTTs = tlsRoundTrips(cs.Version)
 				}
 			})
@@ -73,8 +72,8 @@ func foreignProbe(ctx context.Context, rt http.RoundTripper, url string, extra h
 		WroteRequest: func(httptrace.WroteRequestInfo) { lock(func() { pt.wrote = now() }) },
 		GotFirstResponseByte: func() {
 			lock(func() {
-				if !pt.wrote.IsZero() {
-					pt.s.TTFB = now().Sub(pt.wrote)
+				if !pt.wrote.isZero() {
+					pt.s.TTFB = now().sub(pt.wrote)
 				}
 			})
 		},
@@ -86,12 +85,12 @@ func foreignProbe(ctx context.Context, rt http.RoundTripper, url string, extra h
 	pt.mu.Lock()
 	defer pt.mu.Unlock()
 	s := pt.s
-	s.Total = end.Sub(start)
+	s.Total = end.sub(start)
 	wr := pt.wrote
-	if wr.IsZero() {
+	if wr.isZero() {
 		wr = start
 	}
-	s.HTTP = end.Sub(wr)
+	s.HTTP = end.sub(wr)
 	// A reused connection (only possible with a custom RoundTripper) still
 	// yields a request-time sample, just without connection stages.
 	s.Staged = !pt.reused
@@ -122,7 +121,7 @@ func doProbe(ctx context.Context, rt http.RoundTripper, url string, extra http.H
 
 // selfProbe performs a GET of the small URL on an existing (load) transport.
 // Only the request-to-full-response time is meaningful.
-func selfProbe(ctx context.Context, rt http.RoundTripper, url string, extra http.Header, now func() time.Time) (LatencySample, error) {
+func selfProbe(ctx context.Context, rt http.RoundTripper, url string, extra http.Header, now func() instant) (LatencySample, error) {
 	pt := &probeTimes{}
 	start := now()
 	trace := &httptrace.ClientTrace{
@@ -139,10 +138,10 @@ func selfProbe(ctx context.Context, rt http.RoundTripper, url string, extra http
 	pt.mu.Lock()
 	wr := pt.wrote
 	pt.mu.Unlock()
-	if wr.IsZero() {
+	if wr.isZero() {
 		wr = start
 	}
-	return LatencySample{Total: end.Sub(start), HTTP: end.Sub(wr)}, nil
+	return LatencySample{Total: end.sub(start), HTTP: end.sub(wr)}, nil
 }
 
 // setProbeHeaders applies the headers every test request carries, then the

@@ -54,3 +54,16 @@ request-to-full-response time, so both kinds measure the same thing.
 If the supplied transport reuses a connection for a foreign or idle probe
 (possible only with a custom `RoundTripper`), the sample is kept but carries
 no stage timings, and the stats omit stage medians.
+
+### LAT-10: Probe timing clock
+Probe durations are measured on a monotonic clock that resolves finely enough
+to see a probe, which on a fast path is tens of microseconds. This is not the
+platform default everywhere: on Windows Go's `time.Now` takes its monotonic
+reading from the system timer tick, between 0.5 ms and 15.625 ms depending on
+what else is running on the machine, so probe durations measured with it
+quantise to zero or to a whole tick. Means survive that; jitter, the median and
+the percentiles do not, and a probe shorter than a tick can collapse a trimmed
+mean to zero. Windows therefore reads `QueryPerformanceCounter` instead. Where
+no such clock can be reached the run falls back to `time.Now` for every sample —
+never mixing clocks within one sample — reports its numbers, and records a
+warning saying they are quantised (RES-6, INV-3).

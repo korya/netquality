@@ -34,6 +34,8 @@ type Event struct {
 	ThroughputBPS float64 `json:"throughput_bps,omitempty"`
 	Bytes         int64   `json:"bytes,omitempty"`
 	RPM           float64 `json:"rpm,omitempty"`
+	// Hold marks an interval no flow was added into (LOAD-13).
+	Hold bool `json:"hold,omitempty"`
 	// Probe fields.
 	ProbeKind string        `json:"probe_kind,omitempty"` // "idle", "foreign", "self"
 	Latency   time.Duration `json:"latency_ns,omitempty"`

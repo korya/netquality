@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"sync"
+	"time"
 )
 
 // Run executes the responsiveness test against t and returns the Result.
@@ -424,7 +425,7 @@ loop:
 			d := p.eng.Interval(engine.Observation{Elapsed: elapsed, Bytes: p.bytes.payloadBytes(), Flows: p.flowCount(), Foreign: f, Self: sl})
 			dr.Intervals = d.Interval
 			ev := Event{Kind: EventInterval, Phase: dir.String(), Direction: dir.String(),
-				Interval: d.Interval, Flows: p.flowCount(), ThroughputBPS: d.ThroughputBPS, Bytes: p.bytes.get(), RPM: d.RPM}
+				Interval: d.Interval, Flows: p.flowCount(), ThroughputBPS: d.ThroughputBPS, Bytes: p.bytes.get(), RPM: d.RPM, Hold: d.Hold}
 			r.emit(ev)
 			if d.Stop {
 				r.opts.Logger.Info("responsiveness stable", "dir", dir.String(), "rpm", d.RPM)
@@ -474,6 +475,15 @@ loop:
 	dr.Reason = p.stopReason()
 	dr.Truncated = dr.Reason != ReasonNone
 	dr.RPM, dr.ForeignRPM, dr.SelfRPM = sum.RPM, sum.ForeignRPM, sum.SelfRPM
+	if sum.LowerBoundBPS > 0 {
+		dr.ThroughputLowerBoundBPS = sum.LowerBoundBPS
+		dr.RPMUpperBound = sum.RPMUpperBound
+		dr.LowerBoundWindow = &BoundWindow{
+			Start:     time.Duration(sum.LowerBoundStart-1) * sp.Interval,
+			Duration:  time.Duration(sum.LowerBoundIntervals) * sp.Interval,
+			Intervals: sum.LowerBoundIntervals,
+		}
+	}
 	if len(sum.Foreign) > 0 {
 		st := engine.ComputeLatencyStats(sum.Foreign)
 		dr.Loaded.Foreign = &st

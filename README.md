@@ -18,7 +18,7 @@ $ nq --target apple
 Target     mensura.cdn-apple.com (HTTP/2.0) 17.253.24.71
 Idle       102.2ms median, 131.8ms p80, jitter 32.5ms (5 probes)
 Download      178.3 Mbps    365 RPM  loaded 185.2ms median, 512.6ms p99  [8 flows, high/high confidence]
-Upload        125.9 Mbps    311 RPM  loaded 160.7ms median, 471.0ms p99  [13 flows, medium/low confidence, TRUNCATED: duration_cap]
+Upload        125.9 Mbps    311 RPM  (>= 121.4 Mbps, <= 330 RPM over 4s)  loaded 160.7ms median, 471.0ms p99  [8 flows, medium/low confidence, TRUNCATED: duration_cap]
 Cost       370.5 MB moved in 21.0s
 ```
 
@@ -85,6 +85,10 @@ meaning — never for additions — so stored documents stay interpretable. Dire
 zero. Each `DirectionResult` carries `truncated`, `reason`
 (`bytes_cap` | `duration_cap` | `cancelled` | `flow_error`) and the draft's
 `throughput_confidence` / `responsiveness_confidence` (`low` | `medium` | `high`).
+Whenever four consecutive intervals agreed, a direction also carries
+`throughput_lower_bound_bps` — a conservative figure that holds even when the
+estimate did not converge — with its `lower_bound_window` and `rpm_upper_bound`
+(LOAD-13).
 
 ## CLI
 

@@ -233,6 +233,9 @@ func printDir(w io.Writer, name string, d *netquality.DirectionResult) {
 		return
 	}
 	fmt.Fprintf(w, "%-10s %8.1f Mbps  %5.0f RPM", name, d.ThroughputBPS/1e6, d.RPM)
+	if d.LowerBoundWindow != nil {
+		fmt.Fprintf(w, "  (>= %.1f Mbps, <= %.0f RPM over %.0fs)", d.ThroughputLowerBoundBPS/1e6, d.RPMUpperBound, d.LowerBoundWindow.Duration.Seconds())
+	}
 	if d.Loaded.Combined != nil {
 		fmt.Fprintf(w, "  loaded %s median, %s", ms(d.Loaded.Combined.Median), tail(*d.Loaded.Combined))
 	}

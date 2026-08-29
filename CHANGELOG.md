@@ -5,53 +5,58 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-### Fixed
-- **Windows latency figures are no longer quantised to the system timer tick.**
-  Go's `time.Now` takes its monotonic reading from `_INTERRUPT_TIME`, which
-  advances only every 0.5–15.625 ms depending on what else is running on the
-  machine, so probe durations — tens of microseconds on a fast path — measured
-  either 0 or a whole tick. Means survived that, which is why `rpm` looked
-  plausible, but jitter was overstated by roughly 7×, the median snapped to a
-  tick boundary and `p95` was tens of percent high; a probe shorter than a tick
-  could collapse `self_rpm` to 0 entirely. Probe timings now read
-  `QueryPerformanceCounter`, as Go's own `testing` package does for benchmarks
-  (LAT-10). Other platforms are unchanged. If the high-resolution counter
-  cannot be reached the run says so in `warnings` rather than presenting coarse
-  numbers as exact.
-- `rpm` and `loaded.*` are computed over every probe sample since throughput
-  became stable (reported as `loaded_window`), not only the last four
-  intervals, so a sparse foreign series is no longer omitted as if no
-  fresh-connection probe had ever succeeded; when a series has samples in
-  the phase but none in the window, a warning says so (#24).
-- `nqserver` closes idle connections (`--idle-timeout`, default 2 min) and
-  pings silent HTTP/2 peers (30 s + 15 s); previously a connection whose
-  client had gone quiet was held until the process exited (#24).
-- `server.LimitListener`: `Close` now releases an `Accept` waiting at the
-  connection cap, so `http.Server.Serve` returns and `Shutdown` no longer
-  waits out its timeout (#24).
+## [0.4.0] - 2026-08-29
+
+The measurement algorithm reaches a confident answer on links the previous
+release could not finish measuring, and every figure now says which part of
+the run it came from. `schema_version` stays 1: all result fields are additions.
+
+### Added
+- **A throughput lower bound.** Each direction reports
+  `throughput_lower_bound_bps` — the lowest goodput of the latest four
+  consecutive measured intervals that agree within tolerance — with
+  `lower_bound_window` and `rpm_upper_bound` (the responsiveness over that
+  window). It is present whenever such a window formed, converged or not, so
+  a caller that gets a medium-confidence estimate still has a figure that
+  holds. The CLI prints it after the estimate; interval events carry `hold`
+  (#20).
+- `loaded_window` reports the intervals `rpm` and `loaded` were computed
+  over, and `nqserver --idle-timeout` (default 2 min) bounds how long a
+  connection with no request in flight is kept (#24).
 
 ### Changed
-- **Ramp-and-hold algorithm** (#20). Flows are added in doubling steps and the
-  ramp stops when a step gains less than 10 % goodput; responsiveness is
+- **Ramp-and-hold algorithm** (#20). Flows are added in doubling steps and
+  the ramp stops when a step gains less than 10 % goodput; responsiveness is
   tracked from the end of the ramp and judged on its windowed values; a
   goodput drop of more than 25 % restarts goodput tracking; upload intervals
   inflated by the HTTP/2 send window of new flows are excluded. Every
   simulated scenario now converges with high confidence inside the 12 s
-  budget (10 Gbps at 150 ms RTT, CDN per-flow caps, shaper bursts, a
-  capacity change mid-run), links ≤ 100 Mbps finish 1–3 s sooner, and a
+  budget — 10 Gbps at 150 ms RTT, CDN per-flow caps, shaper bursts, a
+  capacity change mid-run — links ≤ 100 Mbps finish 1–3 s sooner, and a
   20 Mbps upload reports 20 Mbps instead of 53. New `StabilityParams`
   fields: `SendBufferBytes`, `RampGainTolerance`, `ChangeTolerance`;
   `DefaultUploadSendBuffer`. `FlowIncrement` is now the floor of a step.
-- **Lower bound.** Each direction reports `throughput_lower_bound_bps`, the
-  lowest goodput of the latest four consecutive measured intervals within
-  tolerance of their mean, with
-  `lower_bound_window` and `rpm_upper_bound` (the RPM over that window).
-  It is present whenever such a window formed, converged or not, so a
-  caller gets a figure that holds even from a medium-confidence run. The
-  CLI prints it after the estimate; interval events carry `hold`. Additive
-  fields, `schema_version` stays 1.
+- `rpm` and `loaded.*` are computed over every probe sample since throughput
+  became stable, never fewer than the draft's trailing four intervals, rather
+  than over the trailing intervals alone. Foreign probes are sparse — a TLS
+  handshake each — so the old window could hold self samples and no foreign
+  one, and `loaded.foreign` was then omitted as if no fresh-connection probe
+  had ever succeeded. A series with samples in the phase but none in the
+  window is now named in a warning (#24).
 
 ### Fixed
+- **Windows latency figures are no longer quantised to the system timer
+  tick.** Go's `time.Now` takes its monotonic reading from `_INTERRUPT_TIME`,
+  which advances only every 0.5–15.625 ms depending on what else is running
+  on the machine, so probe durations — tens of microseconds on a fast path —
+  measured either 0 or a whole tick. Means survived that, which is why `rpm`
+  looked plausible, but jitter was overstated by roughly 7×, the median
+  snapped to a tick boundary and `p95` was tens of percent high; a probe
+  shorter than a tick could collapse `self_rpm` to 0 entirely. Probe timings
+  now read `QueryPerformanceCounter`, as Go's own `testing` package does for
+  benchmarks (LAT-10). Other platforms are unchanged. If the high-resolution
+  counter cannot be reached the run says so in `warnings` rather than
+  presenting coarse numbers as exact.
 - Throughput no longer measures the test's own probe traffic. The fixed
   per-probe byte estimate (5000 B foreign, 1000 B self) was added to the same
   counter the engine reads as goodput, so a stalled or very slow path
@@ -61,6 +66,11 @@ All notable changes to this project are documented here. The format follows
   cost still counts against `MaxBytes` and `bytes` (LIM-2); `throughput_bps`,
   `peak_throughput_bps` and `mean_throughput_bps` now count load-flow bytes
   only (LOAD-4, LOAD-11).
+- `nqserver` closes idle connections and pings silent HTTP/2 peers (30 s +
+  15 s); previously a connection whose client had gone quiet was held until
+  the process exited. `server.LimitListener`: `Close` now releases an
+  `Accept` waiting at the connection cap, so `http.Server.Serve` returns and
+  `Shutdown` no longer waits out its timeout (#24).
 - Data race in the load phase: the reason a phase stopped was read on the
   phase goroutine before the flow and probe goroutines were joined, while any
   of them could still be writing it.
@@ -191,7 +201,8 @@ All notable changes to this project are documented here. The format follows
 - Unit, loopback integration and opt-in live (`NQ_LIVE=1`) tests; CI on
   Linux/macOS/Windows plus a six-target cross-compile matrix.
 
-[Unreleased]: https://github.com/korya/netquality/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/korya/netquality/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/korya/netquality/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/korya/netquality/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/korya/netquality/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/korya/netquality/compare/v0.1.1...v0.2.0

@@ -199,6 +199,7 @@ func TestSignedURLsEndToEnd(t *testing.T) {
 	backend := signedBackend(t, nq.URL, signKey, time.Now().Add(5*time.Minute), "laptop-7")
 	o := tokenOpts("") // no credential on the client at all
 	o.Directions = Both
+	o.MaxDuration = 1500 * time.Millisecond // long enough to converge: foreign samples then qualify by design
 	res, err := Run(context.Background(), Target{ConfigURL: backend.URL + "/config"}, o)
 	if err != nil {
 		t.Fatal(err)

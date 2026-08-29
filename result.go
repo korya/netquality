@@ -101,9 +101,9 @@ const (
 	ReasonFlowError   TruncationReason = "flow_error"
 )
 
-// BoundWindow locates the hold intervals a bound was computed over, as an
+// IntervalWindow locates the intervals a figure was computed over, as an
 // offset from the phase start and a length, in nominal intervals.
-type BoundWindow struct {
+type IntervalWindow struct {
 	Start     time.Duration `json:"start_ns"`
 	Duration  time.Duration `json:"duration_ns"`
 	Intervals int           `json:"intervals"`
@@ -139,14 +139,19 @@ type DirectionResult struct {
 	// stable; Reason says which limit.
 	Truncated bool             `json:"truncated"`
 	Reason    TruncationReason `json:"reason,omitempty"`
-	// Loaded latency statistics gathered while the link was under load.
-	Loaded LoadedLatency `json:"loaded"`
+	// Loaded latency statistics gathered while the link was under load, over
+	// LoadedWindow: every interval since throughput became stable, or the
+	// last MovingAverageDistance intervals when it never did (LOAD-5). A
+	// probe series with samples in the phase but none in the window is
+	// omitted and explained in Warnings.
+	Loaded       LoadedLatency   `json:"loaded"`
+	LoadedWindow *IntervalWindow `json:"loaded_window,omitempty"`
 	// ThroughputLowerBoundBPS is a conservative figure that holds even when
 	// the estimate has not converged: the lowest goodput of the latest
 	// sustained window of measured intervals (LOAD-13). Absent when no such
 	// window formed (a run cut short). LowerBoundWindow says which window.
-	ThroughputLowerBoundBPS float64      `json:"throughput_lower_bound_bps,omitempty"`
-	LowerBoundWindow        *BoundWindow `json:"lower_bound_window,omitempty"`
+	ThroughputLowerBoundBPS float64         `json:"throughput_lower_bound_bps,omitempty"`
+	LowerBoundWindow        *IntervalWindow `json:"lower_bound_window,omitempty"`
 	// RPMUpperBound is the responsiveness over the lower-bound window. Queues
 	// may not have been full there, so the loaded RPM is at most this.
 	RPMUpperBound float64 `json:"rpm_upper_bound,omitempty"`

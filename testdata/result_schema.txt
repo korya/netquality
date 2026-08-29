@@ -52,6 +52,9 @@ download.loaded.self.stages.dns_ns int64
 download.loaded.self.stages.tls_ns int64
 download.loaded.self.stages.tls_per_rtt_ns int64
 download.loaded.self.stages.ttfb_ns int64
+download.loaded_window.duration_ns int64
+download.loaded_window.intervals int
+download.loaded_window.start_ns int64
 download.lower_bound_window.duration_ns int64
 download.lower_bound_window.intervals int
 download.lower_bound_window.start_ns int64
@@ -155,6 +158,9 @@ upload.loaded.self.stages.dns_ns int64
 upload.loaded.self.stages.tls_ns int64
 upload.loaded.self.stages.tls_per_rtt_ns int64
 upload.loaded.self.stages.ttfb_ns int64
+upload.loaded_window.duration_ns int64
+upload.loaded_window.intervals int
+upload.loaded_window.start_ns int64
 upload.lower_bound_window.duration_ns int64
 upload.lower_bound_window.intervals int
 upload.lower_bound_window.start_ns int64

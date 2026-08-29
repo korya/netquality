@@ -177,3 +177,68 @@ func ieq(a, b []int) bool {
 	}
 	return true
 }
+
+func TestWorkingConditionsWindow(t *testing.T) {
+	// Foreign probes land only in intervals 3–5 of a flat 100 Mbps link;
+	// self probes every interval. Once goodput is stable the window runs
+	// from the stable interval to the end, so the foreign samples qualify
+	// even though the last four intervals hold none.
+	e := New(StabilityParams{}, 16)
+	flows, bytes := e.InitialFlows(), int64(0)
+	self := []LatencySample{{HTTP: 20 * time.Millisecond, Total: 20 * time.Millisecond}}
+	foreign := []LatencySample{{Connect: 20 * time.Millisecond, TLS: 20 * time.Millisecond, TLSRTTs: 1, HTTP: 20 * time.Millisecond, Total: 60 * time.Millisecond, Staged: true}}
+	var last Decision
+	for i := 1; i <= 12; i++ {
+		bytes += 100e6 / 8
+		var f []LatencySample
+		if i >= 3 && i <= 5 {
+			f = foreign
+		}
+		last = e.Interval(Observation{Elapsed: time.Second, Bytes: bytes, Flows: flows, Foreign: f, Self: self})
+		flows += last.AddFlows
+		if last.Stop {
+			break
+		}
+	}
+	s := e.Summary(nil, nil)
+	if !s.ThroughputStable || s.WindowFrom < 2 || s.WindowFrom > 5 {
+		t.Fatalf("stable=%v window from %d (intervals %d)", s.ThroughputStable, s.WindowFrom, s.Intervals)
+	}
+	if len(s.Foreign) == 0 || s.ForeignRPM == 0 || s.PhaseForeign != 3 || s.PhaseSelf != s.Intervals {
+		t.Errorf("foreign samples lost: window %d, foreign_rpm %.0f, phase counts %d/%d", len(s.Foreign), s.ForeignRPM, s.PhaseForeign, s.PhaseSelf)
+	}
+
+	// Never stable: the draft's trailing window stands and the early
+	// foreign samples are outside it; the phase count still says they exist.
+	e = New(StabilityParams{StdDevTolerance: 1e-12}, 16)
+	flows, bytes = e.InitialFlows(), 0
+	for i := 1; i <= 12; i++ {
+		bytes += int64(100e6/8) + int64(i%3)*1e6
+		var f []LatencySample
+		if i <= 3 {
+			f = foreign
+		}
+		d := e.Interval(Observation{Elapsed: time.Second, Bytes: bytes, Flows: flows, Foreign: f, Self: self})
+		flows += d.AddFlows
+	}
+	s = e.Summary(nil, nil)
+	if s.ThroughputStable || s.WindowFrom != 9 || len(s.Foreign) != 0 || s.PhaseForeign != 3 {
+		t.Errorf("unstable: window from %d, foreign in window %d, phase %d", s.WindowFrom, len(s.Foreign), s.PhaseForeign)
+	}
+
+	// A goodput drop restarts the window at the new steady state.
+	e = New(StabilityParams{}, 16)
+	flows, bytes = e.InitialFlows(), 0
+	for i := 1; i <= 14; i++ {
+		if i <= 7 {
+			bytes += 200e6 / 8
+		} else {
+			bytes += 100e6 / 8
+		}
+		d := e.Interval(Observation{Elapsed: time.Second, Bytes: bytes, Flows: flows, Foreign: foreign, Self: self})
+		flows += d.AddFlows
+	}
+	if s = e.Summary(nil, nil); !s.ThroughputStable || s.WindowFrom < 8 {
+		t.Errorf("after the drop: stable=%v window from %d", s.ThroughputStable, s.WindowFrom)
+	}
+}

@@ -3,6 +3,7 @@ package netquality
 import (
 	"context"
 	"crypto/tls"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -247,22 +248,48 @@ func TestWireContract(t *testing.T) {
 	}
 }
 
+// runBudget is the per-direction budget of run i. Each run gets a different one
+// so that its duration-cap warning names it: that turns "did this result carry
+// a previous run's warnings?" into something the text answers directly. Every
+// budget is short enough that the phase cannot reach MovingAverageDistance
+// intervals, so the cap always trips.
+func runBudget(i int) time.Duration {
+	return 250*time.Millisecond + time.Duration(i)*10*time.Millisecond
+}
+
 // TestRepeatedRunsAreIndependent guards against global state: differently
 // configured runs in one process must not influence each other.
 func TestRepeatedRunsAreIndependent(t *testing.T) {
+	const runs = 6
 	target, client := newTestServer(t, server.Options{})
-	for i := 0; i < 6; i++ {
+	for i := 0; i < runs; i++ {
 		flows := 1 + i%4
 		res, err := Run(context.Background(), target, Options{HTTPClient: client, Directions: Download, IdleProbes: 1 + i,
-			MaxFlows: flows, MaxDuration: 250 * time.Millisecond, MaxBytes: 1 << 40, Stability: fastStability()})
+			MaxFlows: flows, MaxDuration: runBudget(i), MaxBytes: 1 << 40, Stability: fastStability()})
 		if err != nil {
 			t.Fatal(err)
 		}
 		if res.Idle.Samples != 1+i || res.Download.Flows > flows {
 			t.Errorf("run %d: idle=%d (want %d) flows=%d (max %d)", i, res.Idle.Samples, 1+i, res.Download.Flows, flows)
 		}
-		if len(res.Warnings) != 1 || !strings.Contains(res.Warnings[0], "duration cap") {
-			t.Errorf("run %d: warnings must not accumulate across runs: %v", i, res.Warnings)
+		// This run's own warning must be there...
+		mine := fmt.Sprintf("duration cap (%s)", runBudget(i))
+		if !hasWarning(res, mine) {
+			t.Errorf("run %d: expected %q among %v", i, mine, res.Warnings)
+		}
+		// ...and nobody else's. A Result that carried warnings over from an
+		// earlier run would name that run's budget, which is the leak this
+		// test exists to catch. Counting warnings instead only tracked how many
+		// kinds a short phase happens to emit, which legitimately varies: a
+		// probe series with no sample inside the working-conditions window adds
+		// a second warning depending on how the probes fell (see #32).
+		for j := 0; j < runs; j++ {
+			if j == i {
+				continue
+			}
+			if other := fmt.Sprintf("duration cap (%s)", runBudget(j)); hasWarning(res, other) {
+				t.Errorf("run %d carries run %d's warning %q: %v", i, j, other, res.Warnings)
+			}
 		}
 	}
 }

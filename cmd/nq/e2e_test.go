@@ -190,8 +190,17 @@ func TestEdgeFlags(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &res); err != nil {
 		t.Fatal(err)
 	}
-	if res.Idle != nil || res.Download == nil || res.Download.Intervals != 0 || res.Download.Reason != netquality.ReasonDurationCap || res.Download.ThroughputBPS == 0 {
+	if res.Idle != nil || res.Download == nil || res.Download.Intervals != 0 || res.Download.Reason != netquality.ReasonDurationCap {
 		t.Errorf("edge run: idle=%v download=%+v", res.Idle, res.Download)
+	}
+	// With no completed interval, throughput falls back to the phase mean
+	// (LOAD-11). Assert that relationship rather than a non-zero figure: a
+	// runner slow enough to transfer no payload in 150ms reports 0, and 0 is
+	// the honest answer there — goodput counts load-flow bytes only, so the
+	// alternative would be quoting the test's own probe traffic back (LOAD-4).
+	if d := res.Download; d != nil && d.ThroughputBPS != d.MeanThroughputBPS {
+		t.Errorf("no interval completed, so throughput must be the mean fallback: %v vs %v",
+			d.ThroughputBPS, d.MeanThroughputBPS)
 	}
 	// Invalid sizes and durations are usage errors, not runs.
 	for _, args := range [][]string{

@@ -156,7 +156,7 @@ directory relative to the repo root; `.` is the library.
 | Limits (client) | Budget exhausted mid-run ends with a flagged flow_error, not a hang | . | TestBudgetExhaustedMidRunIsGraceful |
 | Limits (client) | Run completes under a server connection cap | . | TestConnectionCapDoesNotBreakRun |
 | `--auth-token` | Flag and `NQ_AUTH_TOKEN`; 401 exits 1 | cmd/nq | TestAuthTokenFlagAndEnv |
-| Edge flags | Duration shorter than interval; invalid sizes/durations are usage errors; zero flows/probes mean defaults | cmd/nq | TestEdgeFlags |
+| Edge flags | Duration shorter than interval: terminates with `duration_cap`, zero intervals, throughput falling back to the phase mean; invalid sizes/durations are usage errors; zero flows/probes mean defaults | cmd/nq | TestEdgeFlags |
 | Signed URLs | Fixed test vector; empty key, no path, oversized subject rejected | server | TestSignURLVector |
 | Signed URLs | Verify table: order, extra params, rotation, leeway, expiry, max TTL, wrong key, tampered path/sub/exp, malformed, padded/standard base64, percent-encoded path, duplicate params, exp zero/negative/overflow/now, reserved characters in `sub` | server | TestVerifySignature |
 | Signed URLs | Anonymous server ignores signatures | server | TestHandlerAnonymousServerAcceptsSignedURLs |
@@ -184,7 +184,7 @@ than describe a feature. Goldens are regenerated deliberately with
 |---|---|---|---|
 | INV-4 | Eight mixed runs (download, upload, cancelled) leave no goroutine and no open client socket behind, checked the instant `Run` returns | . | TestNoLeaksAcrossRuns |
 | Wire contract | Identity encoding on every request, octet-stream POST uploads, GET elsewhere, fresh connection per idle/foreign probe, self probes on load connections | . | TestWireContract |
-| No global state | Differently configured runs in one process do not influence each other | . | TestRepeatedRunsAreIndependent |
+| No global state | Differently configured runs in one process do not influence each other; each result's warnings name its own budget and no other run's | . | TestRepeatedRunsAreIndependent |
 | INV-7 | Every JSON path and kind of `Result` pinned in `testdata/result_schema.txt`; snake_case enforced | . | TestResultSchemaGolden |
 | INV-7 | A stored schema-1 document parses with values intact; `schema_version` readable first; unknown fields ignored | . | TestStoredResultDocumentParses |
 | Parsers | Fuzz targets with seed corpora: config document, bearer parsing, signature verification, size flag (CI explores for a few seconds; seeds always run) | ., server, cmd/nq | FuzzParseServerConfig, FuzzAuthorize, FuzzVerifySignature, FuzzParseBytes |

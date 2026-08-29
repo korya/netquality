@@ -69,6 +69,9 @@ directory relative to the repo root; `.` is the library.
 | Engine | Lower bound = minimum of the latest sustained window of measured intervals, present in a converged flat run; a drain interval breaks the window; none from an unstable series | internal/engine | TestLowerBoundFromSustainedWindow |
 | Engine | Goodput drop beyond `ChangeTolerance` restarts tracking and the bound window | internal/engine | TestCapacityDropRestartsGoodputTracking |
 | Engine | Phase stops only with both series stable | internal/engine | TestStopNeedsBothSeriesStable |
+| Lower bound | Both directions report `throughput_lower_bound_bps`, its window and `rpm_upper_bound`; bound ≤ peak; interval events carry `hold` | . | TestLowerBoundInResult |
+| Lower bound | A run cut short of four intervals omits the bound | . | TestNoLowerBoundWhenCutShort |
+| CLI output | Lower bound and RPM upper bound printed after the estimate, only when a window exists | cmd/nq | TestPrintDirShowsBound |
 
 ## Safety limits
 

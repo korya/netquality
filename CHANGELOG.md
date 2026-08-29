@@ -17,10 +17,14 @@ All notable changes to this project are documented here. The format follows
   20 Mbps upload reports 20 Mbps instead of 53. New `StabilityParams`
   fields: `SendBufferBytes`, `RampGainTolerance`, `ChangeTolerance`;
   `DefaultUploadSendBuffer`. `FlowIncrement` is now the floor of a step.
-- Engine summaries carry a sustained lower bound on throughput — the lowest
-  goodput of the latest four consecutive measured intervals within tolerance
-  of their mean — and the matching RPM upper bound (not yet in `Result`;
-  see #20).
+- **Lower bound.** Each direction reports `throughput_lower_bound_bps`, the
+  lowest goodput of the latest four consecutive measured intervals within
+  tolerance of their mean, with
+  `lower_bound_window` and `rpm_upper_bound` (the RPM over that window).
+  It is present whenever such a window formed, converged or not, so a
+  caller gets a figure that holds even from a medium-confidence run. The
+  CLI prints it after the estimate; interval events carry `hold`. Additive
+  fields, `schema_version` stays 1.
 
 ### Fixed
 - Throughput no longer measures the test's own probe traffic. The fixed

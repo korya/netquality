@@ -44,6 +44,16 @@ accepts ahead of the wire. An interval in which that credit exceeds
 `StdDevTolerance` of the bytes counted is a drain interval: it contributes
 to no figure and no decision. Download phases have no credit.
 
+### LOAD-13: Lower bound
+A direction reports `throughput_lower_bound_bps`, the lowest goodput of the
+latest window of `MovingAverageDistance` consecutive measured intervals (no
+drain interval among them) whose goodputs are within `StdDevTolerance` of
+their mean, with
+`lower_bound_window` (offset, length) and `rpm_upper_bound`, the
+responsiveness over that window. Present whenever such a window formed —
+converged or not — never above `throughput_bps` when both come from the same
+window, and reset by a goodput drop (LOAD-4). Interval events carry `hold`.
+
 ### LOAD-5: Responsiveness stability
 Once the ramp has ended or throughput is stable, responsiveness (LOAD-6) is
 computed each interval over the last `MovingAverageDistance` intervals of

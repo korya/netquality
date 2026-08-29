@@ -101,6 +101,14 @@ const (
 	ReasonFlowError   TruncationReason = "flow_error"
 )
 
+// BoundWindow locates the hold intervals a bound was computed over, as an
+// offset from the phase start and a length, in nominal intervals.
+type BoundWindow struct {
+	Start     time.Duration `json:"start_ns"`
+	Duration  time.Duration `json:"duration_ns"`
+	Intervals int           `json:"intervals"`
+}
+
 // DirectionResult is the outcome of one load phase.
 type DirectionResult struct {
 	Direction string `json:"direction"`
@@ -133,6 +141,15 @@ type DirectionResult struct {
 	Reason    TruncationReason `json:"reason,omitempty"`
 	// Loaded latency statistics gathered while the link was under load.
 	Loaded LoadedLatency `json:"loaded"`
+	// ThroughputLowerBoundBPS is a conservative figure that holds even when
+	// the estimate has not converged: the lowest goodput of the latest
+	// sustained window of measured intervals (LOAD-13). Absent when no such
+	// window formed (a run cut short). LowerBoundWindow says which window.
+	ThroughputLowerBoundBPS float64      `json:"throughput_lower_bound_bps,omitempty"`
+	LowerBoundWindow        *BoundWindow `json:"lower_bound_window,omitempty"`
+	// RPMUpperBound is the responsiveness over the lower-bound window. Queues
+	// may not have been full there, so the loaded RPM is at most this.
+	RPMUpperBound float64 `json:"rpm_upper_bound,omitempty"`
 	// RPM is the draft's Responsiveness score: the mean of ForeignRPM and SelfRPM
 	// (or ForeignRPM alone when self probes were unavailable).
 	RPM float64 `json:"rpm"`

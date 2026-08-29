@@ -1,13 +1,16 @@
 # netquality [![CI](https://github.com/korya/netquality/actions/workflows/ci.yml/badge.svg)](https://github.com/korya/netquality/actions/workflows/ci.yml) [![Go Reference](https://pkg.go.dev/badge/github.com/korya/netquality.svg)](https://pkg.go.dev/github.com/korya/netquality)
 
-A Go library and CLI that measure the **capacity, latency and responsiveness**
-of a network path by running the IETF *Responsiveness under Working
-Conditions* test ([draft-ietf-ippm-responsiveness-09][draft]) against Apple's,
-Cloudflare's, or your own server.
+Measure the **capacity, latency and responsiveness** of a network path by
+running the IETF *Responsiveness under Working Conditions* test
+([draft-ietf-ippm-responsiveness-09][draft]) against Apple's, Cloudflare's, or
+your own server. Ships as three things: a **Go library**, the **`nq`** client,
+and **`nqserver`**, a reference server you can host yourself.
 
-- Standard library only, no CGO, cross-compiles for Windows/macOS/Linux on
-  amd64 and arm64. Requires Go 1.26+ (older lines no longer receive TLS/HTTP
-  security fixes).
+- **Windows, macOS and Linux** on amd64 and arm64, supported as measurement
+  targets rather than just build targets: where a platform's defaults would
+  distort a number, the library works around them.
+- Standard library only, no CGO, so it adds nothing to your build. Requires
+  Go 1.26+ (older lines no longer receive TLS/HTTP security fixes).
 - Every run is bounded by **time and connection count** before it starts —
   and by bytes too when you say the link is metered — and every number in
   the result says how it was obtained.
@@ -224,7 +227,7 @@ telemetry.
 | Item | Draft | Here | Why |
 |---|---|---|---|
 | Interval (ID) | 5 s | **1 s** | 4 intervals must complete before stability can be declared; with the 12 s per-direction budget a 5 s interval could never stabilise. Earlier drafts and shipping tools use 1 s. Configurable via `Stability.Interval`. |
-| Time budget | "implementations may" limit | mandatory `MaxDuration`; `MaxBytes` opt-in | Runs on laptops; time bounds cost proportionally to the link. |
+| Time budget | "implementations may" limit | mandatory `MaxDuration`; `MaxBytes` opt-in | Runs on other people's machines and networks; a time bound makes cost proportional to the link instead of unbounded. |
 | Byte cap default | (handoff spec: 250 MB) | none | A fixed byte cap starves fast links of the intervals a confident RPM needs (≈ 8 × rate); the caller knows which networks are metered, the library cannot. |
 | Flow error | abort the test | abort the **phase**, report `reason=flow_error`, keep other results | Partial data with a flag beats none. |
 | Self probes on HTTP/1.1 | use TCP RTT estimate | omitted; RPM from foreign probes only, warning recorded | TCP_INFO is not portable in pure Go. |

@@ -1,13 +1,22 @@
 # netquality — guide for coding agents
 
-`netquality` is a Go library and CLI that measure a network path's download
-and upload capacity, idle and loaded latency, jitter, and responsiveness
-(RPM) by running the IETF "Responsiveness under Working Conditions" test
+`netquality` measures a network path's download and upload capacity, idle and
+loaded latency, jitter, and responsiveness (RPM) by running the IETF
+"Responsiveness under Working Conditions" test
 (draft-ietf-ippm-responsiveness-09) against Apple's, Cloudflare's, or a
-self-hosted server. It is consumed by a proprietary endpoint-diagnostics
-agent on employee laptops, which drives its two defining traits: every run is
-bounded by time, bytes, and connections before it starts, and it sends nothing
-but the test itself.
+self-hosted server. It ships as three things: a Go library, the `nq` client
+binary, and the `nqserver` reference server. All three are supported on
+Windows, macOS and Linux (amd64 and arm64) — supported as *measurement*
+targets, not merely as build targets, so a defect that only distorts numbers
+on one platform is a defect.
+
+Two traits define it, and they are principles in their own right rather than
+any one consumer's requirements: every run is bounded by time, bytes, and
+connections before it starts, and it sends nothing but the test itself. They
+exist because the library runs on other people's machines and networks —
+embedded in a desktop diagnostics agent, a CLI on a laptop, a probe in CI —
+and none of those can afford a measurement that costs an unbounded amount or
+phones home.
 
 ## Tech stack
 

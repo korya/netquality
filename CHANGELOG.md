@@ -5,6 +5,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- Connections opened through a caller-supplied `DialTLSContext` (or `DialTLS`)
+  were not tracked, so an HTTP/2 connection still winding down when `Run`
+  returned outlived it — for ever, on a transport without `IdleConnTimeout`.
+  They are now torn down with the run (INV-4). `test_endpoint` cannot be
+  honoured through a custom TLS dialer; the run now warns instead of silently
+  ignoring it (DISC-9).
+
 ## [0.4.0] - 2026-08-29
 
 The measurement algorithm reaches a confident answer on links the previous

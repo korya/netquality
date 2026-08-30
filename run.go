@@ -126,6 +126,9 @@ func (r *runner) run(ctx context.Context, t Target) (*Result, error) {
 			r.warn("test_endpoint %q is ignored because a proxy dials the origin", cfg.TestEndpoint)
 		}
 	}
+	if r.factory.customTLS && r.factory.testEndpoint != "" {
+		r.warn("test_endpoint %q is ignored because the transport has a custom TLS dialer", cfg.TestEndpoint)
+	}
 
 	if r.opts.IdleProbes > 0 {
 		r.emit(Event{Kind: EventPhase, Phase: "idle"})

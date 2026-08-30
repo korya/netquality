@@ -351,3 +351,23 @@ func hasWarning(res *Result, substr string) bool {
 	}
 	return false
 }
+
+// TestTestEndpointCustomTLSDialer (DISC-9): a custom TLS dialer cannot honour
+// test_endpoint, and the run says so instead of silently ignoring it.
+func TestTestEndpointCustomTLSDialer(t *testing.T) {
+	srv := startServer(t, server.Options{TestEndpoint: "192.0.2.1"}, nil, nil, true)
+	client, _ := countingTLSClient()
+	res, err := Run(context.Background(), Target{ConfigURL: srv.URL + server.ConfigPath}, Options{
+		HTTPClient: client, Directions: Download, IdleProbes: 1,
+		MaxDuration: 300 * time.Millisecond, MaxBytes: 1 << 40, Stability: fastStability(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasWarning(res, "custom TLS dialer") {
+		t.Errorf("warnings = %v", res.Warnings)
+	}
+	if res.Download.HTTPVersion != "HTTP/2.0" {
+		t.Errorf("tracking must not cost HTTP/2: got %q", res.Download.HTTPVersion)
+	}
+}

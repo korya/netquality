@@ -11,16 +11,16 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with: { go-version: '1.27.0' }
       - run: go vet ./...
       # Build-tagged files are invisible to the lint job's own GOOS, so a
       # //go:build windows file would otherwise reach master unvetted.
       - run: GOOS=windows go vet ./...
-      - uses: golangci/golangci-lint-action@v7
+      - uses: golangci/golangci-lint-action@v9
         with: { version: latest }
-      - uses: golangci/golangci-lint-action@v7
+      - uses: golangci/golangci-lint-action@v9
         with: { version: latest }
         env: { GOOS: windows }
       - name: govulncheck
@@ -32,8 +32,8 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with: { go-version: '1.27.0' }
       - run: go test -race -count=2 -coverprofile=coverage.out ./...
         shell: bash # PowerShell splits "-coverprofile=coverage.out" and passes ".out" as a package
@@ -43,15 +43,15 @@ jobs:
   minimum-go:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with: { go-version: '1.26.7' } # must match the `go` directive's minor in go.mod
       - run: go test -count=1 ./...
   fuzz:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with: { go-version: '1.27.0' }
       - name: Fuzz parsers briefly (seed corpus always runs in go test; this explores)
         run: |
@@ -72,8 +72,8 @@ jobs:
           - { goos: linux,   goarch: amd64 }
           - { goos: linux,   goarch: arm64 }
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with: { go-version: '1.27.0' }
       - run: go build ./...
         env: { GOOS: "${{ matrix.goos }}", GOARCH: "${{ matrix.goarch }}", CGO_ENABLED: "0" }

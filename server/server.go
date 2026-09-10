@@ -16,6 +16,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -35,6 +36,8 @@ const (
 	// nq runs per client per window before requests are refused with 429.
 	DefaultMaxClientBytes = 8 << 30
 	DefaultClientWindow   = 10 * time.Minute
+	// DefaultMaxClientConcurrency leaves room for 16 flows and server teardown.
+	DefaultMaxClientConcurrency = 32
 	// maxTokenLength bounds the credential we are willing to compare.
 	maxTokenLength = 1024
 )
@@ -57,81 +60,109 @@ type Options struct {
 	SigningKeys [][]byte
 	// UploadSize caps the bytes accepted by one upload request (default 16 GiB).
 	UploadSize int64
-	// MaxClientBytes and ClientWindow form a per-client budget keyed by source
-	// IP: a large download or upload that would exceed the budget within the
-	// window is refused with 429 before it starts. Requests already running
-	// are never slowed down, so measurements stay unbiased. The small
-	// endpoint is exempt. MaxClientBytes < 0 disables the budget.
+	// MaxClientBytes and ClientWindow form a token bucket per source IP or
+	// verified signed subject. A large download or upload starts only while
+	// its balance is positive, and charges actual payload bytes on completion.
+	// Defaults are 8 GiB per 10 minutes. This is not a strict byte quota:
+	// admitted transfers are never slowed or canceled by the budget.
+	// MaxClientBytes < 0 disables both byte accounting and admission slots.
 	MaxClientBytes int64
 	ClientWindow   time.Duration
+	// MaxClientConcurrency caps active large/download and upload handlers per
+	// budget identity; nonpositive values select 32. Config/small are exempt.
+	// Outstanding payload and concurrent overshoot are bounded by this cap
+	// times max(LargeSize, UploadSize): 512 GiB with defaults. Increase it for
+	// more simultaneous flows or clients sharing an IP. Ignored when the
+	// byte budget is disabled. A canceled handler holds its slot until return.
+	MaxClientConcurrency int
 }
 
-// clientBudget is a per-IP token bucket refilled at MaxClientBytes per
-// ClientWindow. It is consulted once when a request starts.
+// clientBudget gates admission, never streaming. Its mutex protects every
+// bucket, including those referenced by outstanding admission tickets.
 type clientBudget struct {
-	mu     sync.Mutex
-	max    float64
-	window time.Duration
-	seen   map[string]*bucket
-	now    func() time.Time
+	mu          sync.Mutex
+	max         float64
+	window      time.Duration
+	concurrency int
+	seen        map[string]*bucket
+	now         func() time.Time
 }
 
 type bucket struct {
 	tokens float64
 	last   time.Time
+	active int
 }
 
-func newClientBudget(max int64, window time.Duration) *clientBudget {
-	return &clientBudget{max: float64(max), window: window, seen: map[string]*bucket{}, now: time.Now}
+const (
+	budgetExhausted      = "client byte budget exhausted"
+	concurrencyExhausted = "client concurrency limit reached"
+	maxRetryWait         = time.Duration(1<<63 - 1)
+)
+
+func newClientBudget(max int64, window time.Duration, concurrency int) *clientBudget {
+	return &clientBudget{max: float64(max), window: window, concurrency: concurrency,
+		seen: map[string]*bucket{}, now: time.Now}
 }
 
-// refill brings ip's bucket up to date and returns it (locked by caller).
-func (b *clientBudget) refill(ip string) *bucket {
+// balance computes replenishment without changing last (caller holds mu).
+func (b *clientBudget) balance(bk *bucket, now time.Time) float64 {
+	return min(b.max, bk.tokens+b.max*max(0, now.Sub(bk.last).Seconds())/b.window.Seconds())
+}
+
+func (b *clientBudget) refill(bk *bucket, now time.Time) {
+	bk.tokens = b.balance(bk, now)
+	bk.last = now
+}
+
+// admission owns one slot. The admitting handler settles it exactly once,
+// after all its transfer work has returned, even on an I/O error or panic.
+type admission struct {
+	budget *clientBudget
+	bucket *bucket
+}
+
+func (b *clientBudget) admit(key string) (admission, string, time.Duration) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
 	now := b.now()
-	bk := b.seen[ip]
+	bk := b.seen[key]
 	if bk == nil {
-		bk = &bucket{tokens: b.max, last: now}
-		b.seen[ip] = bk
-		if len(b.seen) > 10000 { // bound memory: forget idle clients
+		if len(b.seen) >= 10000 { // opportunistic cleanup, not a hard map cap
 			for k, v := range b.seen {
-				if now.Sub(v.last) > b.window {
+				// Never forget ownership or debt, which can last many windows.
+				if v.active == 0 && b.balance(v, now) == b.max {
 					delete(b.seen, k)
 				}
 			}
 		}
+		bk = &bucket{tokens: b.max, last: now}
+		b.seen[key] = bk
 	}
-	bk.tokens = minf(b.max, bk.tokens+b.max*now.Sub(bk.last).Seconds()/b.window.Seconds())
-	bk.last = now
-	return bk
+	b.refill(bk, now)
+	if bk.tokens <= 0 {
+		wait := -bk.tokens / b.max * float64(b.window)
+		// Out-of-range float-to-int conversion is implementation-dependent.
+		if wait >= float64(maxRetryWait) {
+			return admission{}, budgetExhausted, maxRetryWait
+		}
+		return admission{}, budgetExhausted, time.Duration(wait)
+	}
+	if bk.active >= b.concurrency {
+		// No transfer timeout exists, so this is only an advisory retry hint.
+		return admission{}, concurrencyExhausted, 0
+	}
+	bk.active++
+	return admission{budget: b, bucket: bk}, "", 0
 }
 
-// allow reports whether ip may start a request: its budget must be positive.
-// The request is charged what it actually moves (see charge), so a client can
-// overshoot by at most one request's cap.
-func (b *clientBudget) allow(ip string) (bool, time.Duration) {
+func (a admission) settle(n int64) {
+	b := a.budget
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	bk := b.refill(ip)
-	if bk.tokens > 0 {
-		return true, 0
-	}
-	return false, time.Duration(-bk.tokens / b.max * float64(b.window))
-}
-
-// charge deducts the bytes a finished request moved; the bucket may go
-// negative, which delays the next allow accordingly.
-func (b *clientBudget) charge(ip string, n int64) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	bk := b.refill(ip)
-	bk.tokens -= float64(n)
-}
-
-func minf(a, b float64) float64 {
-	if a < b {
-		return a
-	}
-	return b
+	b.refill(a.bucket, b.now())
+	a.bucket.tokens -= float64(n)
+	a.bucket.active--
 }
 
 // authorize checks the bearer token. It never reveals whether a token was
@@ -178,9 +209,12 @@ func Handler(o Options) http.Handler {
 	if o.ClientWindow <= 0 {
 		o.ClientWindow = DefaultClientWindow
 	}
+	if o.MaxClientConcurrency <= 0 {
+		o.MaxClientConcurrency = DefaultMaxClientConcurrency
+	}
 	var budget *clientBudget
 	if o.MaxClientBytes > 0 {
-		budget = newClientBudget(o.MaxClientBytes, o.ClientWindow)
+		budget = newClientBudget(o.MaxClientBytes, o.ClientWindow, o.MaxClientConcurrency)
 	}
 	filler := make([]byte, streamChunk)
 	_, _ = rand.Read(filler)
@@ -191,7 +225,7 @@ func Handler(o Options) http.Handler {
 	// subject keys the budget instead of the source IP.
 	type metered func(w http.ResponseWriter, r *http.Request) (moved int64)
 	authed := o.AuthToken != "" || len(o.SigningKeys) > 0
-	guard := func(meter bool, signed bool, h metered) http.HandlerFunc {
+	guard := func(cap int64, signed bool, methods []string, h metered) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			key := clientIP(r)
 			if authed {
@@ -209,20 +243,28 @@ func Handler(o Options) http.Handler {
 					return
 				}
 			}
-			if budget != nil && meter {
-				ip := key
-				if ok, wait := budget.allow(ip); !ok {
-					w.Header().Set("Retry-After", strconv.Itoa(int(wait/time.Second)+1))
-					http.Error(w, "client byte budget exhausted", http.StatusTooManyRequests)
+			if len(methods) > 0 && !slices.Contains(methods, r.Method) {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			if budget != nil && cap > 0 {
+				ticket, reason, wait := budget.admit(key)
+				if reason != "" {
+					w.Header().Set("Retry-After", strconv.FormatInt(int64(wait/time.Second)+1, 10))
+					http.Error(w, reason, http.StatusTooManyRequests)
 					return
 				}
-				budget.charge(ip, h(w, r))
+				// A panic cannot leak a slot or erase its potential cost. Normal
+				// returns (including I/O failures) replace the cap with actual bytes.
+				moved := cap
+				defer func() { ticket.settle(moved) }()
+				moved = h(w, r)
 				return
 			}
 			h(w, r)
 		}
 	}
-	mux.HandleFunc(ConfigPath, guard(false, false, func(w http.ResponseWriter, r *http.Request) int64 {
+	mux.HandleFunc(ConfigPath, guard(0, false, nil, func(w http.ResponseWriter, r *http.Request) int64 {
 		base := o.BaseURL
 		if base == "" {
 			base = "https://" + r.Host
@@ -243,22 +285,14 @@ func Handler(o Options) http.Handler {
 		_ = json.NewEncoder(w).Encode(doc)
 		return 0
 	}))
-	mux.HandleFunc(SmallPath, guard(false, true, func(w http.ResponseWriter, r *http.Request) int64 {
-		if r.Method != http.MethodGet && r.Method != http.MethodHead {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return 0
-		}
+	mux.HandleFunc(SmallPath, guard(0, true, []string{http.MethodGet, http.MethodHead}, func(w http.ResponseWriter, r *http.Request) int64 {
 		w.Header().Set("Content-Type", "application/octet-stream")
 		w.Header().Set("Content-Length", "1")
 		w.Header().Set("Cache-Control", "no-store")
 		_, _ = w.Write([]byte{'x'})
 		return 0
 	}))
-	mux.HandleFunc(LargePath, guard(true, true, func(w http.ResponseWriter, r *http.Request) (moved int64) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return 0
-		}
+	mux.HandleFunc(LargePath, guard(o.LargeSize, true, []string{http.MethodGet}, func(w http.ResponseWriter, r *http.Request) (moved int64) {
 		w.Header().Set("Content-Type", "application/octet-stream")
 		w.Header().Set("Content-Length", strconv.FormatInt(o.LargeSize, 10))
 		w.Header().Set("Cache-Control", "no-store")
@@ -279,11 +313,7 @@ func Handler(o Options) http.Handler {
 		}
 		return moved
 	}))
-	mux.HandleFunc(UploadPath, guard(true, true, func(w http.ResponseWriter, r *http.Request) int64 {
-		if r.Method != http.MethodPost && r.Method != http.MethodPut {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return 0
-		}
+	mux.HandleFunc(UploadPath, guard(o.UploadSize, true, []string{http.MethodPost, http.MethodPut}, func(w http.ResponseWriter, r *http.Request) int64 {
 		n, _ := io.Copy(io.Discard, io.LimitReader(r.Body, o.UploadSize))
 		w.Header().Set("Content-Type", "text/plain")
 		_, _ = w.Write([]byte(strconv.FormatInt(n, 10)))

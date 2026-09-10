@@ -14,12 +14,24 @@ All notable changes to this project are documented here. The format follows
   reach higher percentile thresholds.
 
 ### Changed
+- Server byte budgets now limit active downloads and uploads per client IP or
+  signed subject to 32 by default (`--client-concurrency` /
+  `server.Options.MaxClientConcurrency`). Nonpositive values select 32;
+  disabling the byte budget also disables these slots. Higher concurrency
+  gets 429; admitted transfers remain unthrottled. Default request caps allow
+  up to 512 GiB of outstanding payload, so this is not a strict byte quota (#41).
 - Small probe responses must now be complete, nonempty bodies of 1–10 bytes.
   Previously accepted empty or larger custom-server responses are invalid.
   The ten-byte ceiling is fixed, with no caller override; it preserves the
   observed Apple and Cloudflare responses (#40).
 
 ### Fixed
+- Server budget admission and completion are accounted atomically, preventing
+  unlimited concurrent overshoot. Cancellation and I/O errors settle actual
+  bytes; panic unwinding releases the slot and charges the request cap.
+  Cleanup preserves active admissions and unpaid debt; extreme byte-debt
+  retry hints saturate portably. Authenticated unsupported methods return
+  405 before admission checks (#41).
 - Declared oversized probe bodies are rejected before reading, and streamed
   bodies after at most 11 bytes. Invalid sizes no longer become latency
   samples; bounded warnings explain rejection while valid samples and load

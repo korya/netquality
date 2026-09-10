@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"time"
 
@@ -103,22 +104,23 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, onListen 
 	fs := flag.NewFlagSet("nqserver", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	var (
-		listen     = fs.String("listen", ":8443", "address to listen on")
-		certFile   = fs.String("cert", "", "TLS certificate file (PEM)")
-		keyFile    = fs.String("key", "", "TLS private key file (PEM)")
-		selfSigned = fs.Bool("self-signed", false, "generate a self-signed certificate (dev only)")
-		baseURL    = fs.String("base-url", "", "external URL prefix advertised in the config (default: derived from Host header)")
-		largeSize  = fs.Int64("large-size", 8<<30, "size of the large download body in bytes")
-		endpoint   = fs.String("test-endpoint", "", "advertise this host as test_endpoint")
-		authToken  = fs.String("auth-token", os.Getenv("NQSERVER_AUTH_TOKEN"), "bearer token required on every endpoint (env NQSERVER_AUTH_TOKEN)")
-		anonymous  = fs.Bool("allow-anonymous", false, "serve without a token or signing key (implied by --self-signed)")
-		signingKey multiFlag
-		uploadSize = fs.Int64("upload-size", 16<<30, "maximum bytes accepted by one upload request")
-		maxConns   = fs.Int("max-connections", 256, "maximum simultaneous connections (0 = unlimited)")
-		idleTO     = fs.Duration("idle-timeout", 2*time.Minute, "close a connection with no request in flight for this long")
-		clientMax  = fs.Int64("client-bytes", 0, "bytes one client IP may move per --client-window before 429 (-1 = unlimited; default 8 GiB, unlimited with --self-signed)")
-		clientWin  = fs.Duration("client-window", server.DefaultClientWindow, "window for --client-bytes")
-		version    = fs.Bool("version", false, "print version and exit")
+		listen            = fs.String("listen", ":8443", "address to listen on")
+		certFile          = fs.String("cert", "", "TLS certificate file (PEM)")
+		keyFile           = fs.String("key", "", "TLS private key file (PEM)")
+		selfSigned        = fs.Bool("self-signed", false, "generate a self-signed certificate (dev only)")
+		baseURL           = fs.String("base-url", "", "external URL prefix advertised in the config (default: derived from Host header)")
+		largeSize         = fs.Int64("large-size", 8<<30, "size of the large download body in bytes")
+		endpoint          = fs.String("test-endpoint", "", "advertise this host as test_endpoint")
+		authToken         = fs.String("auth-token", os.Getenv("NQSERVER_AUTH_TOKEN"), "bearer token required on every endpoint (env NQSERVER_AUTH_TOKEN)")
+		anonymous         = fs.Bool("allow-anonymous", false, "serve without a token or signing key (implied by --self-signed)")
+		signingKey        multiFlag
+		uploadSize        = fs.Int64("upload-size", 16<<30, "maximum bytes accepted by one upload request")
+		maxConns          = fs.Int("max-connections", 256, "maximum simultaneous connections (0 = unlimited)")
+		idleTO            = fs.Duration("idle-timeout", 2*time.Minute, "close a connection with no request in flight for this long")
+		clientMax         = fs.Int64("client-bytes", 0, "byte credit per client IP or signed subject per --client-window before 429 (-1 = unlimited; default 8 GiB, unlimited with --self-signed)")
+		clientConcurrency = fs.Int("client-concurrency", server.DefaultMaxClientConcurrency, "active large/download and upload requests per client IP or signed subject (nonpositive = 32; disabled with --client-bytes -1)")
+		clientWin         = fs.Duration("client-window", server.DefaultClientWindow, "window for --client-bytes")
+		version           = fs.Bool("version", false, "print version and exit")
 	)
 	fs.Var(&signingKey, "signing-key", "accept URLs signed with this key (hex, base64url, or file:<path>; repeatable for rotation; env NQSERVER_SIGNING_KEY)")
 	if err := fs.Parse(args); err != nil {
@@ -168,6 +170,9 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, onListen 
 			*clientMax = -1 // dev mode on loopback moves gigabytes per run
 		}
 	}
+	if *clientConcurrency <= 0 {
+		*clientConcurrency = server.DefaultMaxClientConcurrency
+	}
 	if *maxConns > 0 && *maxConns < 64 {
 		fmt.Fprintf(stderr, "nqserver: warning: --max-connections %d is below a single client's flows plus probes; tests may stall\n", *maxConns)
 	}
@@ -179,7 +184,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, onListen 
 	ln = server.LimitListener(ln, *maxConns)
 	srv := &http.Server{
 		Handler: server.Handler(server.Options{BaseURL: *baseURL, LargeSize: *largeSize, TestEndpoint: *endpoint,
-			AuthToken: *authToken, SigningKeys: keys, UploadSize: *uploadSize, MaxClientBytes: *clientMax, ClientWindow: *clientWin}),
+			AuthToken: *authToken, SigningKeys: keys, UploadSize: *uploadSize, MaxClientBytes: *clientMax, ClientWindow: *clientWin, MaxClientConcurrency: *clientConcurrency}),
 		TLSConfig:         server.TLSConfig(cert),
 		ReadHeaderTimeout: 10 * time.Second,
 		// IdleTimeout reaps connections between requests; it never bounds an
@@ -200,8 +205,12 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, onListen 
 	if mode == "" {
 		mode = "ANONYMOUS"
 	}
-	fmt.Fprintf(stderr, "nqserver %s listening on %s (config at https://<host>%s) %s, upload cap %d B, client budget %d B/%s, max connections %d, idle timeout %s\n",
-		buildinfo.String(), ln.Addr(), server.ConfigPath, mode, *uploadSize, *clientMax, *clientWin, *maxConns, *idleTO)
+	concurrencyMode := strconv.Itoa(*clientConcurrency)
+	if *clientMax < 0 {
+		concurrencyMode = "unlimited"
+	}
+	fmt.Fprintf(stderr, "nqserver %s listening on %s (config at https://<host>%s) %s, upload cap %d B, client budget %d B/%s, client concurrency %s, max connections %d, idle timeout %s\n",
+		buildinfo.String(), ln.Addr(), server.ConfigPath, mode, *uploadSize, *clientMax, *clientWin, concurrencyMode, *maxConns, *idleTO)
 	if onListen != nil {
 		onListen(ln.Addr())
 	}

@@ -161,6 +161,17 @@ directory relative to the repo root; `.` is the library.
 | Binary | Token from `NQSERVER_AUTH_TOKEN`; `--allow-anonymous` with a real cert | cmd/nqserver | TestTokenFromEnvAndAnonymousOptIn |
 | Auth | Bearer parsing: case, whitespace, wrong/prefix/suffix, wrong scheme, oversized, unicode | server | TestAuthorize |
 | Auth | Every route returns 401 + WWW-Authenticate without the token | server | TestHandlerAuthOnEveryRoute |
+| Concurrent budget | Atomic admission, bounded overshoot and settled debt (SRV-8/12) | server | TestClientBudgetConcurrentAdmission |
+| Budget cleanup | Active slots survive refill/cleanup; only fully refilled inactive clients may be evicted (SRV-8) | server | TestClientBudgetCleanupAndRefill |
+| Budget retry | Zero/fractional debt, debt precedence and saturating retry waits (SRV-8) | server | TestClientBudgetRetryAfter |
+| Concurrent handlers | Default/custom/disabled cap, download/upload/mixed, IP/subject, admitted transfers finish (SRV-12) | server | TestHandlerConcurrentBudget |
+| Budget identity | Signed subjects across IPs, IP across ports, bearer precedence, authentication/method ordering and exemptions (SRV-3/7/8/10) | server | TestHandlerBudgetIdentityAndMethods |
+| Budget settlement | Partial read/write errors, cancellation, zero bytes, panic and portable Retry-After (SRV-8) | server | TestHandlerBudgetExitSettlement |
+| Budget transport | Real H1/H2 cancellation releases slots; shared H2 streams and probes survive; one socket cannot bypass cap (SRV-12) | server | TestBudgetCancellationOverHTTP |
+| Budget lifetime | Cancellation alone cannot release a still-running handler (SRV-12) | server | TestCanceledHandlerKeepsAdmissionUntilReturn |
+| Budget consumers | Enabled-budget 16-flow download/upload, actual admissions, repeated runs and finite-object re-requests (SRV-12) | . | TestClientAdmissionMultiFlow |
+| Budget refusal | Undersized concurrency produces honest partial flow_error result (LOAD-9/SRV-12) | . | TestClientAdmissionRefusalIsGraceful |
+| Budget CLI | Concurrency flag/help/forwarding, self-signed disabled default, refusal and slot release (SRV-12) | cmd/nqserver | TestClientConcurrencyFlag |
 | Limits | Per-client budget: allow while positive, charge actual bytes, refill, per-IP | server | TestClientBudget |
 | Limits | 429 + Retry-After when exhausted; config and small exempt; upload cap | server | TestHandlerBudgetAndUploadCap |
 | Limits | Connection cap blocks the N+1th accept and releases on close | server | TestLimitListener |

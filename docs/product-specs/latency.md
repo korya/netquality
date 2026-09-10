@@ -12,6 +12,9 @@ Before any load, `IdleProbes` (default 5) sequential GETs of the small
 resource run, each on a brand-new connection. A negative `IdleProbes` skips
 the phase and `Result.Idle` is absent. Failed probes are dropped; if none
 succeed the phase yields no result and a warning.
+The whole phase is bounded by `IdleTimeout` (LIM-8). Completed samples are
+reported even when the phase times out or the caller cancels before all
+requested probes complete; interrupted probes never become latency samples.
 
 ### LAT-2: Per-stage timings
 Every fresh-connection sample records DNS, TCP connect, TLS handshake,

@@ -133,6 +133,7 @@ func (r *runner) run(ctx context.Context, t Target) (*Result, error) {
 	if r.opts.IdleProbes > 0 {
 		r.emit(Event{Kind: EventPhase, Phase: "idle"})
 		idle, err := r.idle(ctx)
+		r.res.Idle = idle // retain completed samples even when the phase ends early
 		if ctx.Err() != nil {
 			r.res.Cancelled = true
 			finish()
@@ -140,8 +141,6 @@ func (r *runner) run(ctx context.Context, t Target) (*Result, error) {
 		}
 		if err != nil {
 			r.warn("idle latency: %v", err)
-		} else {
-			r.res.Idle = idle
 		}
 	}
 
@@ -153,6 +152,11 @@ func (r *runner) run(ctx context.Context, t Target) (*Result, error) {
 		dirs = []Directions{Upload}
 	}
 	for _, d := range dirs {
+		if ctx.Err() != nil {
+			r.res.Cancelled = true
+			finish()
+			return r.res, ctx.Err()
+		}
 		r.emit(Event{Kind: EventPhase, Phase: d.String(), Direction: d.String()})
 		dr, err := r.loadPhase(ctx, d)
 		if d == Download {
@@ -186,7 +190,7 @@ func (r *runner) discover(ctx context.Context, t Target) (*ServerConfig, error) 
 	if t.ConfigURL == "" {
 		return nil, errors.New("netquality: empty config URL")
 	}
-	cctx, cancel := context.WithTimeout(ctx, r.opts.ConfigTimeout)
+	cctx, cancel := r.opts.clock.WithTimeout(ctx, r.opts.ConfigTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(cctx, http.MethodGet, t.ConfigURL, nil)
 	if err != nil {
@@ -228,6 +232,8 @@ func (r *runner) discover(ctx context.Context, t Target) (*ServerConfig, error) 
 
 // idle measures idle latency with sequential fresh-connection probes.
 func (r *runner) idle(ctx context.Context) (*LatencyStats, error) {
+	ctx, cancel := r.opts.clock.WithTimeout(ctx, r.opts.IdleTimeout)
+	defer cancel()
 	rt := r.factory.newTransport(false)
 	defer closeIdle(rt)
 	var samples []LatencySample
@@ -244,14 +250,21 @@ func (r *runner) idle(ctx context.Context) (*LatencyStats, error) {
 		samples = append(samples, s)
 		r.emit(Event{Kind: EventProbe, Phase: "idle", ProbeKind: "idle", Latency: s.Total})
 	}
-	if len(samples) == 0 {
+	var st *LatencyStats
+	if len(samples) > 0 {
+		stats := engine.ComputeLatencyStats(samples)
+		st = &stats
+	}
+	if ctx.Err() != nil {
+		return st, fmt.Errorf("idle timeout (%s; %d/%d probes completed): %w", r.opts.IdleTimeout, len(samples), r.opts.IdleProbes, ctx.Err())
+	}
+	if st == nil {
 		if lastErr == nil {
 			lastErr = errors.New("no samples")
 		}
 		return nil, lastErr
 	}
-	st := engine.ComputeLatencyStats(samples)
-	return &st, nil
+	return st, nil
 }
 
 // phaseState is the mutable state of one load phase.
@@ -364,13 +377,16 @@ func (p *phaseState) proto() string {
 // loadPhase runs one direction: ramp flows, probe, evaluate stability, stop on
 // stability or a limit.
 func (r *runner) loadPhase(ctx context.Context, dir Directions) (*DirectionResult, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	sp := r.opts.Stability
 	if dir == Upload && sp.SendBufferBytes == 0 {
 		// Upload bytes are counted when the transport takes them, ahead of
 		// the wire by up to the HTTP/2 stream window per flow.
 		sp.SendBufferBytes = DefaultUploadSendBuffer
 	}
-	pctx, cancel := context.WithTimeout(ctx, r.opts.MaxDuration)
+	pctx, cancel := r.opts.clock.WithTimeout(ctx, r.opts.MaxDuration)
 	defer cancel()
 
 	p := &phaseState{dir: dir, cancel: cancel}
@@ -449,7 +465,9 @@ loop:
 	// Determine why we stopped, then tear everything down. stop() is
 	// once-guarded, so a flow or probe goroutine that already named a reason
 	// wins; reading p.reason here to pre-empt it would race with them.
-	if pctx.Err() != nil {
+	if ctx.Err() != nil {
+		p.stop(ReasonCancelled)
+	} else if pctx.Err() != nil {
 		p.stop(ctxReason(pctx))
 	}
 	cancel()

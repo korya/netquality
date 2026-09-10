@@ -13,8 +13,10 @@ An unknown target name is a usage error.
 
 ### CLI-2: Limits and parameters
 `--max-duration`, `--max-bytes` (accepts `250MB`, `1GB`, `100MiB`, plain
-bytes), `--max-flows`, `--idle-probes`, `--interval` map onto the library
+bytes), `--max-flows`, `--idle-probes`, `--idle-timeout`, `--interval` map onto the library
 options; invalid sizes are usage errors.
+`--idle-timeout` (default 10 s) caps the whole idle measurement phase, not
+each probe; a non-positive value selects the default (LIM-8).
 
 ### CLI-3: Direction flags
 `--download-only` and `--upload-only` select one phase; passing both is a

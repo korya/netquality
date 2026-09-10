@@ -29,7 +29,10 @@ directory relative to the repo root; `.` is the library.
 |---|---|---|---|
 | Fresh-connection probes | Per-stage medians reported | . | TestRunLoopback |
 | Skipping | `IdleProbes < 0` skips the phase | . | TestRunDirections |
-| Cancellation | Context cancelled during idle probes returns partial result | . | TestCancelDuringIdle |
+| Cancellation | Parent cancellation/deadline retains completed idle samples and addresses, omits load, and wins over the idle cap (LIM-4) | . | TestCancelDuringIdle |
+| Idle cap | HTTP/1.1 and HTTP/2 stalls before headers or in the body end the whole idle phase, retain samples, warn once, close owned sockets, and continue load (LIM-8) | . | TestIdleTimeout |
+| Phase budgets | Injected discovery/idle/load deadlines are canceled on return; skipped idle has none; early HTTP/2 upload responses with stalled request reads cannot block teardown (LIM-9) | . | TestPhaseTimeoutBudgets |
+| Caller deadline | Parent deadline during load reports cancelled, retaining the current direction and omitting later load (LIM-4) | . | TestCallerDeadlineDuringLoad |
 | TLS normalisation | TLS 1.2 handshake counted as 2 RTTs, TLS 1.3 as 1 | . | TestTLS12Normalisation |
 | Statistics | min/median/mean/max/jitter; no percentile at 4 samples | internal/engine | TestStatsOf |
 | Statistics | Percentile presence thresholds 5/10/20/100 and values; never equal to the max; highest-present helper | internal/engine | TestPercentilePresenceThresholds |
@@ -124,6 +127,8 @@ directory relative to the repo root; `.` is the library.
 | Feature | Scenario | Package | Test |
 |---|---|---|---|
 | `--json` | stdout is a `Result`, stderr quiet | cmd/nq | TestJSONOutput |
+| `--idle-timeout` | HTTP/1.1 and HTTP/2 header/body stalls retain idle samples and a JSON warning, then complete load with exit 0 (LIM-8, CLI-2) | cmd/nq | TestIdleTimeoutOutput |
+| Binary idle cap | Built CLI terminates a stalled idle body within its watchdog and prints partial idle statistics (LIM-8) | cmd/nq | TestIdleTimeoutBinary |
 | Human output | Table, progress on stderr, `not run` directions | cmd/nq | TestHumanOutput |
 | `--events` | JSON lines on stderr | cmd/nq | TestEventsOutput |
 | Exit codes | 0 ok, 1 failed, 2 usage | cmd/nq | TestExitCodes |

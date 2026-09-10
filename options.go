@@ -1,6 +1,7 @@
 package netquality
 
 import (
+	"context"
 	"github.com/korya/netquality/internal/engine"
 	"log/slog"
 	"net/http"
@@ -56,6 +57,9 @@ const (
 	// DefaultConfigTimeout bounds config discovery, which happens before the
 	// per-direction budgets apply.
 	DefaultConfigTimeout = 10 * time.Second
+	// DefaultIdleTimeout bounds the whole idle measurement phase, regardless
+	// of how many probes were requested.
+	DefaultIdleTimeout = 10 * time.Second
 )
 
 // Options configures a test run. The zero value is valid and uses the defaults.
@@ -65,8 +69,8 @@ type Options struct {
 	MaxDuration time.Duration
 	// MaxBytes, if > 0, bounds the bytes moved by each direction's load
 	// phase, probes included; hitting it truncates the phase with
-	// reason=bytes_cap. 0 (the default) means no byte cap: MaxDuration alone
-	// bounds the run. Set it on metered links.
+	// reason=bytes_cap. 0 (the default) means no byte cap: MaxDuration
+	// bounds each load phase. Set it on metered links.
 	MaxBytes int64
 	// MaxFlows caps the number of concurrent load-generating connections
 	// (default 16, draft MNP).
@@ -76,6 +80,11 @@ type Options struct {
 	// IdleProbes is the number of fresh-connection probes for idle latency
 	// (default 5). 0 uses the default; negative skips idle measurement.
 	IdleProbes int
+	// IdleTimeout bounds the whole idle measurement phase (default 10s), not
+	// each probe. On expiry, successful samples are kept, a warning is recorded,
+	// and the selected load phases still run. Non-positive values use the
+	// default. An earlier caller deadline or cancellation stops the whole run.
+	IdleTimeout time.Duration
 	// Stability holds the draft's algorithm parameters; zero fields use
 	// defaults. SendBufferBytes applies to upload phases only and defaults to
 	// DefaultUploadSendBuffer there; set it negative to disable.
@@ -83,7 +92,9 @@ type Options struct {
 	// HTTPClient supplies the base transport (proxy, TLS config, dialer). Only
 	// its Transport is used; each load flow gets its own clone so flows do not
 	// share a connection. If the Transport is not an *http.Transport it is used
-	// as-is and flows may share connections (a warning is recorded).
+	// as-is and flows may share connections (a warning is recorded). Custom
+	// transports and dialers must honor cancellation and close promptly;
+	// Run cannot forcibly stop caller-supplied code. HTTPClient.Timeout is unused.
 	HTTPClient *http.Client
 	// Logger receives debug logs; nil discards them.
 	Logger *slog.Logger
@@ -116,6 +127,9 @@ func (o Options) withDefaults() Options {
 	if o.ConfigTimeout <= 0 {
 		o.ConfigTimeout = DefaultConfigTimeout
 	}
+	if o.IdleTimeout <= 0 {
+		o.IdleTimeout = DefaultIdleTimeout
+	}
 	o.Stability = o.Stability.WithDefaults()
 	if o.HTTPClient == nil {
 		o.HTTPClient = &http.Client{}
@@ -141,6 +155,7 @@ type clock interface {
 	HighResolution() bool
 	NewTicker(d time.Duration) ticker
 	After(d time.Duration) <-chan time.Time
+	WithTimeout(context.Context, time.Duration) (context.Context, context.CancelFunc)
 }
 
 type ticker interface {
@@ -155,6 +170,9 @@ func (realClock) Mono() instant                          { return monoNow() }
 func (realClock) HighResolution() bool                   { return monoHighResolution() }
 func (realClock) NewTicker(d time.Duration) ticker       { return realTicker{time.NewTicker(d)} }
 func (realClock) After(d time.Duration) <-chan time.Time { return time.After(d) }
+func (realClock) WithTimeout(ctx context.Context, d time.Duration) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(ctx, d)
+}
 
 type realTicker struct{ t *time.Ticker }
 

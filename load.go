@@ -150,7 +150,27 @@ func oneRequest(ctx context.Context, f *flow, dir Directions, url string, c *byt
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	if dir == Upload {
+		// An HTTP/2 peer can respond before consuming the upload and then
+		// stop reading. Once RoundTrip returns headers, cancellation alone
+		// may not wake its writer from flow control. Closing the response
+		// body aborts the stream and wakes both the writer and our reader.
+		// Join the callback and close exactly once, even on normal completion.
+		closed := make(chan struct{})
+		stop := context.AfterFunc(ctx, func() {
+			_ = resp.Body.Close()
+			close(closed)
+		})
+		defer func() {
+			if stop() {
+				_ = resp.Body.Close()
+			} else {
+				<-closed
+			}
+		}()
+	} else {
+		defer resp.Body.Close()
+	}
 	proto := resp.Proto
 	f.proto.Store(&proto)
 	if err := checkStatus(resp); err != nil {

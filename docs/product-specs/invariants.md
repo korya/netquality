@@ -22,9 +22,13 @@ A result never implies "not measured" with a zero. Absent phases are absent
 levels accompany converged values.
 
 ### INV-4: No work outlives `Run`
-When `Run` returns, all goroutines, connections, and timers it created are
-gone. Cancellation propagates to every flow and probe. This covers the
-client's own sockets. Abandoning a load flow closes its socket with data still
+When `Run` returns, its flow/probe goroutines have joined, its context timers
+are canceled, and its owned connections are closed. Cancellation propagates
+to every flow and probe. Caller-supplied code must cooperate and return
+promptly (LIM-9). A custom TLS dialer may still be inside a transport-owned
+dial goroutine with a socket it has not returned; if it returns after
+teardown, that connection is closed on handover. This covers the
+client's owned sockets. Abandoning a load flow closes its socket with data still
 unread, which TCP turns into an abortive close, so how long the *server's*
 socket survives is the server's business, not something the client can
 promise.

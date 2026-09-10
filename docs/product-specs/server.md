@@ -70,6 +70,25 @@ more simultaneous flows or sharing an IP across clients must size the cap
 accordingly or use signed subjects. A handler retains its slot until it
 returns, even if its context has already been canceled.
 
+Slots have no expiry. A stalled request, before or after its first byte, can
+hold a slot indefinitely under SRV-11; filling the slots denies large and
+upload requests to every client sharing that identity, even across many byte
+refill windows. Config and small requests remain exempt. Separately issued
+signed subjects isolate devices behind NAT or a load balancer; a shared bearer
+token alone does not separate their IP-based budgets.
+
+Size this per-identity request cap for simultaneous load flows plus handler
+teardown overlap (32 allows headroom for a default client's 16 flows). Size
+SRV-9's global connection cap for all simultaneous clients' load connections,
+fresh probes and teardown. These are separate limits: HTTP/2 multiplexes
+requests, so a connection cap is not a request cap. With defaults, one identity
+can hit 32 active transfers before the server reaches 256 connections.
+
+If `--client-concurrency` is explicitly supplied while byte budgeting is
+disabled, `nqserver` warns that it is ignored and that a positive
+`--client-bytes` enables both limits. This includes self-signed mode's default
+disabled budget; omitting the concurrency flag produces no such warning.
+
 ### SRV-9: Request and connection caps
 One upload request accepts at most `--upload-size` bytes (default 16 GiB) and
 then answers normally; the large download is bounded by `--large-size`.

@@ -73,7 +73,9 @@ type Options struct {
 	// Outstanding payload and concurrent overshoot are bounded by this cap
 	// times max(LargeSize, UploadSize): 512 GiB with defaults. Increase it for
 	// more simultaneous flows or clients sharing an IP. Ignored when the
-	// byte budget is disabled. A canceled handler holds its slot until return.
+	// byte budget is disabled. A handler holds its slot until return; stalled
+	// requests can deny every client sharing the identity indefinitely. Use
+	// separately issued signed subjects to isolate clients behind a shared IP.
 	MaxClientConcurrency int
 }
 
@@ -225,7 +227,7 @@ func Handler(o Options) http.Handler {
 	// subject keys the budget instead of the source IP.
 	type metered func(w http.ResponseWriter, r *http.Request) (moved int64)
 	authed := o.AuthToken != "" || len(o.SigningKeys) > 0
-	guard := func(cap int64, signed bool, methods []string, h metered) http.HandlerFunc {
+	guard := func(requestCap int64, signed bool, methods []string, h metered) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			key := clientIP(r)
 			if authed {
@@ -247,7 +249,7 @@ func Handler(o Options) http.Handler {
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 				return
 			}
-			if budget != nil && cap > 0 {
+			if budget != nil && requestCap > 0 {
 				ticket, reason, wait := budget.admit(key)
 				if reason != "" {
 					w.Header().Set("Retry-After", strconv.FormatInt(int64(wait/time.Second)+1, 10))
@@ -256,7 +258,7 @@ func Handler(o Options) http.Handler {
 				}
 				// A panic cannot leak a slot or erase its potential cost. Normal
 				// returns (including I/O failures) replace the cap with actual bytes.
-				moved := cap
+				moved := requestCap
 				defer func() { ticket.settle(moved) }()
 				moved = h(w, r)
 				return

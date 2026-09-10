@@ -172,6 +172,7 @@ directory relative to the repo root; `.` is the library.
 | Budget consumers | Enabled-budget 16-flow download/upload, actual admissions, repeated runs and finite-object re-requests (SRV-12) | . | TestClientAdmissionMultiFlow |
 | Budget refusal | Undersized concurrency produces honest partial flow_error result (LOAD-9/SRV-12) | . | TestClientAdmissionRefusalIsGraceful |
 | Budget CLI | Concurrency flag/help/forwarding, self-signed disabled default, refusal and slot release (SRV-12) | cmd/nqserver | TestClientConcurrencyFlag |
+| Budget CLI warning | Explicit concurrency with disabled budget warns; implicit defaults and enabled budget do not (SRV-12) | cmd/nqserver | TestClientConcurrencyDisabledWarning |
 | Limits | Per-client budget: allow while positive, charge actual bytes, refill, per-IP | server | TestClientBudget |
 | Limits | 429 + Retry-After when exhausted; config and small exempt; upload cap | server | TestHandlerBudgetAndUploadCap |
 | Limits | Connection cap blocks the N+1th accept and releases on close | server | TestLimitListener |

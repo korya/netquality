@@ -20,12 +20,17 @@ All notable changes to this project are documented here. The format follows
   disabling the byte budget also disables these slots. Higher concurrency
   gets 429; admitted transfers remain unthrottled. Default request caps allow
   up to 512 GiB of outstanding payload, so this is not a strict byte quota (#41).
+  Slots have no expiry: stalled requests can indefinitely deny large/download
+  and upload endpoints to clients sharing an identity. Separately issued
+  signed subjects isolate clients behind shared IPs.
 - Small probe responses must now be complete, nonempty bodies of 1–10 bytes.
   Previously accepted empty or larger custom-server responses are invalid.
   The ten-byte ceiling is fixed, with no caller override; it preserves the
   observed Apple and Cloudflare responses (#40).
 
 ### Fixed
+- `nqserver` warns when an explicit `--client-concurrency` is ignored because
+  byte budgeting is disabled, including self-signed mode's default (#41).
 - Server budget admission and completion are accounted atomically, preventing
   unlimited concurrent overshoot. Cancellation and I/O errors settle actual
   bytes; panic unwinding releases the slot and charges the request cap.

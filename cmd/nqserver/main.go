@@ -173,6 +173,13 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, onListen 
 	if *clientConcurrency <= 0 {
 		*clientConcurrency = server.DefaultMaxClientConcurrency
 	}
+	if *clientMax < 0 {
+		fs.Visit(func(f *flag.Flag) {
+			if f.Name == "client-concurrency" {
+				fmt.Fprintln(stderr, "nqserver: warning: --client-concurrency is ignored because the client byte budget is disabled; set --client-bytes to a positive value to enable both limits")
+			}
+		})
+	}
 	if *maxConns > 0 && *maxConns < 64 {
 		fmt.Fprintf(stderr, "nqserver: warning: --max-connections %d is below a single client's flows plus probes; tests may stall\n", *maxConns)
 	}

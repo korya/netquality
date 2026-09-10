@@ -14,6 +14,13 @@ All notable changes to this project are documented here. The format follows
   reach higher percentile thresholds.
 
 ### Fixed
+- Small probe responses are limited to complete, nonempty bodies of 1–10
+  bytes, preserving Apple and Cloudflare compatibility. Declared oversized
+  bodies are rejected before reading, and streamed bodies after at most 11
+  bytes. Invalid sizes no longer become latency samples; bounded warnings
+  explain rejection while valid samples and load measurements survive (#40).
+  Previously accepted empty or larger custom-server responses are now invalid.
+  Probe cost remains estimated; transport buffering can exceed body-read limits.
 - Idle-timeout warnings retain the preceding probe error and are omitted
   when all requested idle samples have already completed (#39).
 - Caller cancellation retains completed idle samples in partial results;

@@ -238,6 +238,7 @@ func (r *runner) idle(ctx context.Context) (*LatencyStats, error) {
 	defer closeIdle(rt)
 	var samples []LatencySample
 	var lastErr error
+	var invalidSize error
 	for i := 0; i < r.opts.IdleProbes; i++ {
 		if ctx.Err() != nil {
 			break
@@ -248,6 +249,9 @@ func (r *runner) idle(ctx context.Context) (*LatencyStats, error) {
 				break // retain the preceding probe failure as timeout context
 			}
 			lastErr = err
+			if invalidSize == nil && errors.Is(err, errInvalidProbeSize) {
+				invalidSize = err
+			}
 			continue
 		}
 		samples = append(samples, s)
@@ -263,7 +267,16 @@ func (r *runner) idle(ctx context.Context) (*LatencyStats, error) {
 		if lastErr != nil {
 			err = fmt.Errorf("%w; last probe error: %v", err, lastErr)
 		}
+		if invalidSize != nil && !errors.Is(lastErr, errInvalidProbeSize) {
+			err = fmt.Errorf("%w; %v", err, invalidSize)
+		}
 		return st, err
+	}
+	if invalidSize != nil {
+		if lastErr != nil && !errors.Is(lastErr, errInvalidProbeSize) {
+			return st, fmt.Errorf("%w; last probe error: %v", invalidSize, lastErr)
+		}
+		return st, invalidSize
 	}
 	if st == nil {
 		if lastErr == nil {
@@ -581,6 +594,7 @@ func (r *runner) probeLoop(ctx context.Context, p *phaseState) {
 	sem := make(chan struct{}, maxInFlight)
 	var wg sync.WaitGroup
 	defer wg.Wait()
+	var foreignWarning, selfWarning sync.Once
 
 	launch := func(self bool) {
 		select {
@@ -613,6 +627,13 @@ func (r *runner) probeLoop(ctx context.Context, p *phaseState) {
 			if err != nil {
 				if ctx.Err() == nil {
 					r.opts.Logger.Debug("probe failed", "kind", kind, "err", err)
+					if errors.Is(err, errInvalidProbeSize) {
+						warning := &foreignWarning
+						if self {
+							warning = &selfWarning
+						}
+						warning.Do(func() { r.warn("%s %s probe: %v; invalid samples discarded", p.dir, kind, err) })
+					}
 				}
 				return
 			}

@@ -3,6 +3,8 @@ package netquality
 import (
 	"context"
 	"crypto/tls"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptrace"
@@ -24,7 +26,11 @@ type probeTimes struct {
 const (
 	foreignProbeBytes = 5000
 	selfProbeBytes    = 1000
+	// The draft uses one byte; Cloudflare's supported endpoint returns ten.
+	maxProbeBodyBytes = 10
 )
+
+var errInvalidProbeSize = errors.New("invalid probe response size")
 
 // foreignProbe performs a GET of the small URL on a brand-new connection and
 // records per-stage timings. rt must not reuse connections.
@@ -100,7 +106,8 @@ func foreignProbe(ctx context.Context, rt http.RoundTripper, url string, extra h
 	return s, nil
 }
 
-// doProbe issues the GET and drains the 1-byte body.
+// doProbe requires a complete, nonempty response within the compatibility
+// ceiling. The extra byte detects overflow without draining an arbitrary body.
 func doProbe(ctx context.Context, rt http.RoundTripper, url string, extra http.Header) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -115,8 +122,20 @@ func doProbe(ctx context.Context, rt http.RoundTripper, url string, extra http.H
 	if err := checkStatus(resp); err != nil {
 		return err
 	}
-	_, err = io.Copy(io.Discard, resp.Body)
-	return err
+	if resp.ContentLength > maxProbeBodyBytes {
+		return fmt.Errorf("%w: declared %d bytes exceeds %d-byte limit", errInvalidProbeSize, resp.ContentLength, maxProbeBodyBytes)
+	}
+	n, err := io.Copy(io.Discard, io.LimitReader(resp.Body, maxProbeBodyBytes+1))
+	if n > maxProbeBodyBytes {
+		return fmt.Errorf("%w: body exceeds %d-byte limit", errInvalidProbeSize, maxProbeBodyBytes)
+	}
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return fmt.Errorf("%w: empty body (expected 1-%d bytes)", errInvalidProbeSize, maxProbeBodyBytes)
+	}
+	return nil
 }
 
 // selfProbe performs a GET of the small URL on an existing (load) transport.

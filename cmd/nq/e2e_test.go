@@ -104,7 +104,9 @@ func TestCancelledExitCode(t *testing.T) {
 
 func TestTruncatedStillExitsZero(t *testing.T) {
 	var out, errb bytes.Buffer
-	if c := run(base(startServer(t), "--download-only", "--max-bytes", "1MB"), &out, &errb); c != exitOK {
+	// Exercise byte-cap reporting without requiring a minimum loopback rate.
+	// One accounted byte trips the cap; duration is only a generous watchdog.
+	if c := run(base(startServer(t), "--download-only", "--max-bytes", "1", "--max-duration", "5s"), &out, &errb); c != exitOK {
 		t.Fatalf("exit %d: %s", c, errb.String())
 	}
 	if !strings.Contains(out.String(), "TRUNCATED: bytes_cap") || !strings.Contains(out.String(), "Warning    download: byte cap") {

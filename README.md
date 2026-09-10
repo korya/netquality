@@ -29,7 +29,8 @@ Cost       370.5 MB moved in 21.0s
 
 1. **Discovery** – fetches the server's JSON config (`/.well-known/nq` or a
    vendor path) to learn the small-download, large-download and upload URLs.
-2. **Idle latency** – `IdleProbes` sequential GETs of the 1-byte resource,
+2. **Idle latency** – `IdleProbes` sequential GETs of the small resource
+   (1 byte in the draft; up to 10 accepted for Cloudflare compatibility),
    each on a **fresh connection**, so a sample includes DNS + TCP + TLS + HTTP.
    Per-stage medians are reported via `net/http/httptrace`.
 3. **Download under load**, then **upload under load** (sequentially, so the
@@ -222,6 +223,7 @@ compromise) and transparent TCP-level proxies that pass TLS through untouched
 | `MaxDuration` | 12 s per direction | the budget: phase ends; if not yet stable → `truncated`, `reason=duration_cap`. Cost ≤ rate × 12 s |
 | `MaxBytes` | **none** (opt-in) | set on metered links; phase ends → `reason=bytes_cap` |
 | `MaxFlows` | 16 | never more concurrent load connections |
+| Small response body | 1–10 bytes | reject empty/oversized responses; read at most 11 bytes to detect overflow; discard invalid samples and warn |
 | `ctx` cancellation | – | all flows stop within ~200 ms; partial result, `cancelled=true` |
 
 The combined phase budget is `ConfigTimeout + IdleTimeout + N × MaxDuration`,
@@ -245,6 +247,22 @@ connection closed when it hands it over. There are no retries or telemetry.
 The client's `--idle-timeout` measures the whole idle probing phase; the
 server's flag of the same name limits quiet connections between requests.
 
+Probe cost is estimated, including failed loaded attempts: 5000 bytes for a
+foreign probe and 1000 for a self probe. Idle and discovery are outside the
+per-direction byte totals. Body-read limits do not prevent transport/socket
+read-ahead, and headers, TLS, in-flight work, and cancellation can exceed the
+accounted budget. `MaxBytes` is not an exact wire-byte limit. Invalid-size
+warnings are limited to one per phase/probe kind; load continues with only
+valid latency samples.
+
+The ten-byte response ceiling is fixed; there is no caller override. A server
+that changes its small response above ten bytes becomes incompatible with
+latency probing. Load continues to collect capacity measurements within the
+configured budgets, even if every probe fails; loaded latency is then absent
+and RPM is zero. Set `MaxBytes` and `MaxDuration` to bound that cost.
+[Dated compatibility checks](testdata/config/README.md) record the observed
+Apple and Cloudflare response sizes and how to repeat the small GETs.
+
 ## Deviations from the draft
 
 | Item | Draft | Here | Why |
@@ -260,6 +278,7 @@ server's flag of the same name limits quiet connections between requests.
 | Capacity change | – | a > 25 % goodput drop restarts stability tracking | The draft averages across the change. |
 | Responsiveness window | last MAD intervals | every sample since throughput became stable (`loaded_window`) | Foreign probes are sparse (a TLS handshake each); a fixed 4-tick window could hold self samples and no foreign ones, which read as "no fresh connection ever succeeded". Stability is still judged on the draft's window. |
 | Probe byte accounting | – | foreign 5000 B, self 1000 B (draft's estimates) | Counted against `MaxBytes` and the 5 % capacity rule. |
+| Small response size | 1 byte | complete nonempty bodies up to 10 bytes accepted; fixed ceiling, no override | Preserve Cloudflare's advertised ten-byte probe; reject empty and larger bodies before they become latency samples. |
 | Config `version` | must be `1` | `1` or `"1"` accepted | Lenient on the wire, strict on everything else (duplicates, hosts, scheme). |
 | Config field names | `*_download_url`, `upload_url` | also accepts Apple/Cloudflare `*_https_*` names, preferring them | Interop with deployed servers. |
 | Cloudflare target | `mach` hardcodes `h3.speed.cloudflare.com` URLs | uses `aim.cloudflare.com/responsiveness/api/v1/config`, which returns the same URLs | Keeps discovery uniform. |

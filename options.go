@@ -71,6 +71,8 @@ type Options struct {
 	// phase, probes included; hitting it truncates the phase with
 	// reason=bytes_cap. 0 (the default) means no byte cap: MaxDuration
 	// bounds each load phase. Set it on metered links.
+	// Probe attempts use fixed cost estimates; idle/discovery are excluded.
+	// Transport buffering and cancellation can exceed this accounting budget.
 	MaxBytes int64
 	// MaxFlows caps the number of concurrent load-generating connections
 	// (default 16, draft MNP).

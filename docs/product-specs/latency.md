@@ -74,3 +74,14 @@ mean to zero. Windows therefore reads `QueryPerformanceCounter` instead. Where
 no such clock can be reached the run falls back to `time.Now` for every sample —
 never mixing clocks within one sample — reports its numbers, and records a
 warning saying they are quantised (RES-6, INV-3).
+
+### LAT-11: Small response validation
+Idle, foreign, and self probes accept only complete, nonempty response bodies
+of 1–10 bytes. The draft's one-byte response and Cloudflare's ten-byte
+response both fit this compatibility ceiling. A declared length above ten
+is rejected before reading payload; otherwise at most eleven body bytes are
+consumed to detect overflow. Receipt of ten bytes without response completion
+does not establish success: the existing phase/caller deadline still applies.
+Empty, oversized, and incomplete responses produce no latency sample or
+successful-probe event. Rejection closes the response body, preserving other
+streams on a shared HTTP/2 load connection. Invalid-size warnings follow RES-6.

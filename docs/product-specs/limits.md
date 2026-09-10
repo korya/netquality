@@ -18,6 +18,10 @@ any speed. A caller on a metered link sets `MaxBytes` (> 0), which then
 bounds bytes moved per direction, counting load payload plus a fixed estimate
 per probe (5000 B foreign, 1000 B self); reaching it ends the phase with
 `reason=bytes_cap` and a warning. `MaxBytes` ≤ 0 means unlimited.
+Failed loaded probe attempts retain their fixed charge. Idle and discovery
+traffic are outside these per-direction totals. The accounting is an estimate,
+not a wire-byte meter: headers, TLS, transport read-ahead, in-flight requests,
+and cancellation can consume more traffic than the reported budget.
 
 ### LIM-3: Flow cap
 `MaxFlows` (default 16) is never exceeded in any direction.
@@ -71,3 +75,11 @@ not an unconditional wall-clock deadline for a descheduled process or
 blocking caller code. Supplied transports, dialers, body closers, event
 sinks and log handlers must cooperate with cancellation and return promptly;
 they cannot be forcibly stopped by the library (INV-4).
+
+### LIM-10: Small response consumption
+The small-response ceiling (LAT-11) applies independently of the optional
+byte budget. At most eleven bytes of each probe response body are read by
+the client, including the byte used to detect overflow; a declared oversize
+body is rejected without reading payload. Transports and sockets may buffer
+additional data before rejection. This consumption bound neither changes the
+fixed probe estimates nor promises an exact limit on transferred wire bytes.

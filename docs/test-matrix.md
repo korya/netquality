@@ -90,6 +90,11 @@ directory relative to the repo root; `.` is the library.
 
 | Feature | Scenario | Package | Test |
 |---|---|---|---|
+| Probe body cap | HTTP/1.1 and HTTP/2: complete 1–10 bytes accepted, empty/oversized rejected, application reads bounded to 11 bytes, truncation and deadlines preserved (LAT-11, LIM-10) | . | TestProbeResponseSize |
+| Probe isolation | Rejected or timed-out self probe shares an active HTTP/2 connection; load continues on that connection (LAT-11, INV-4) | . | TestProbeRejectionPreservesLoad |
+| Rejected probe cost | Known and unknown oversized probes still hit MaxBytes with their fixed estimates, producing no goodput or latency (LIM-2, LIM-10) | . | TestRejectedProbesHitByteCap |
+| Invalid probes | Partial idle retained; both loaded series reject invalid samples, keep estimated charges out of goodput, dedupe warning events per direction/kind and reset between runs (LAT-11, LIM-2, RES-6) | . | TestInvalidProbeResponses |
+| Invalid idle | All-invalid, mixed failures, timeout and parent cancellation retain samples and diagnostic precedence with one idle warning (LAT-11, LIM-8, RES-6) | . | TestInvalidIdleDiagnostics |
 | MaxBytes | Download truncated with `bytes_cap`, warning, mean throughput fallback | . | TestBytesCap |
 | MaxBytes | Upload truncated with `bytes_cap` | . | TestUploadBytesCap |
 | MaxBytes | Counter: limit 0 never trips, positive limit trips exactly once | . | TestByteCounterLimits |
@@ -129,6 +134,7 @@ directory relative to the repo root; `.` is the library.
 | Feature | Scenario | Package | Test |
 |---|---|---|---|
 | `--json` | stdout is a `Result`, stderr quiet | cmd/nq | TestJSONOutput |
+| Invalid probe output | JSON, human and event output retain partial idle statistics and a single size warning while load succeeds (LAT-11, RES-6) | cmd/nq | TestInvalidProbeOutput |
 | `--idle-timeout` | HTTP/1.1 and HTTP/2 header/body stalls retain idle samples and a JSON warning, then complete load with exit 0 (LIM-8, CLI-2) | cmd/nq | TestIdleTimeoutOutput |
 | Binary idle cap | Built CLI terminates a stalled idle body within its watchdog and prints partial idle statistics (LIM-8) | cmd/nq | TestIdleTimeoutBinary |
 | Human output | Table, progress on stderr, `not run` directions | cmd/nq | TestHumanOutput |

@@ -44,6 +44,12 @@ RPM is round trips per minute; bytes are bytes.
 ### RES-6: Warnings
 Every cap hit, fallback, proxy finding, flow error, and idle failure appends a
 human-readable string to `warnings`, and is logged at warning level.
+Invalid probe sizes produce at most one warning per phase and probe kind:
+one for idle, and one each for foreign/self in each selected load direction.
+Idle retains valid samples even when another probe has an invalid size, and
+combines the size diagnostic with any idle timeout or all-failed warning.
+Caller cancellation retains its precedence. Loaded size failures discard
+samples without aborting load. Warning messages contain no response body.
 
 ### RES-7: Events
 `RunWithEvents` delivers `phase` events for discover/idle/download/upload/done,

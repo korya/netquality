@@ -26,6 +26,10 @@ per probe (5000 B foreign, 1000 B self); reaching it ends the phase with
 Cancelling the context stops all flows and probes within about 200 ms.
 `Run` returns the partial `Result` with `cancelled=true`, the current
 direction marked `reason=cancelled`, together with the context error.
+An earlier caller deadline has the same effect; `duration_cap` identifies
+the direction's own time cap. An independently recorded stop (such as a
+byte cap or flow error) retains its reason. Completed idle samples survive
+cancellation, and directions that have not started remain absent.
 
 ### LIM-5: Cancelled results keep the network identity
 `target.resolved_ips` and `target.local_ips` are populated on cancelled and
@@ -38,3 +42,32 @@ amount of traffic.
 ### LIM-7: Zero and negative options
 Zero values in `Options` select the defaults; a negative `IdleProbes` skips
 idle probing. Zero `StabilityParams` fields select the draft defaults.
+Non-positive `ConfigTimeout`, `IdleTimeout`, and `MaxDuration` select their
+defaults; they never disable the time bounds.
+
+### LIM-8: Idle phase cap
+`IdleTimeout` (default 10 s) bounds the entire idle measurement phase,
+regardless of `IdleProbes`. On expiry, completed samples are retained and a
+warning names the timeout and successful/requested probe counts. An idle
+timeout alone does not cancel the run: selected load phases still execute
+with their own budgets. An earlier caller cancellation or deadline stops
+the run instead (LIM-4). Skipping idle measurement creates no idle deadline.
+The cap does not scale with `IdleProbes`. A healthy slow path or a larger
+probe count may exhaust it; callers needing all requested samples must
+budget enough time for their sequential fresh-connection probes by raising
+`IdleTimeout`. Ten seconds is a configurable product default, not a latency
+threshold that distinguishes a healthy path from a faulty one.
+A timeout warning retains the last preceding probe error when available.
+If every requested sample completed, a deadline observed afterwards does
+not produce an idle-timeout warning; caller cancellation still wins (LIM-4).
+
+### LIM-9: Combined phase budget
+Before network work begins, the combined phase budget is `ConfigTimeout`
+plus `IdleTimeout` when idle is enabled, plus `MaxDuration` for each selected
+direction. Defaults total 44 s for both directions, 32 s for one, or 34 s
+for both with idle skipped. An earlier parent deadline takes precedence.
+Return time also includes local orchestration and prompt teardown: this is
+not an unconditional wall-clock deadline for a descheduled process or
+blocking caller code. Supplied transports, dialers, body closers, event
+sinks and log handlers must cooperate with cancellation and return promptly;
+they cannot be forcibly stopped by the library (INV-4).

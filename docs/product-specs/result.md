@@ -55,3 +55,5 @@ one `warning` event per warning. Every event is timestamped.
 ### RES-8: Sink contract
 The sink is called synchronously from test goroutines; concurrent calls are
 possible and the sink must be safe for that.
+It must return promptly; a blocked sink cannot be interrupted by a context
+deadline and delays phase transitions or teardown (LIM-9).

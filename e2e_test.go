@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -254,19 +255,40 @@ func TestConfigTimeoutAndStatus(t *testing.T) {
 }
 
 func TestCancelDuringIdle(t *testing.T) {
-	srv := startServer(t, server.Options{}, func(h http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == server.SmallPath {
-				time.Sleep(30 * time.Millisecond)
+	for _, mode := range []string{"cancel", "deadline"} {
+		t.Run(mode, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			var attempts atomic.Int64
+			srv := startServer(t, server.Options{}, func(h http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.URL.Path == server.SmallPath && attempts.Add(1) == 2 {
+						if mode == "cancel" {
+							cancel()
+						}
+						<-r.Context().Done()
+						return
+					}
+					h.ServeHTTP(w, r)
+				})
+			}, nil, true)
+			res, err := Run(ctx, Target{ConfigURL: srv.URL + server.ConfigPath}, Options{
+				HTTPClient: insecureClient(), IdleProbes: 1000, IdleTimeout: 10 * time.Second,
+			})
+			wantErr := context.Canceled
+			if mode == "deadline" {
+				wantErr = context.DeadlineExceeded
 			}
-			h.ServeHTTP(w, r)
+			if !errors.Is(err, wantErr) || res == nil || !res.Cancelled {
+				t.Fatalf("err=%v res=%+v", err, res)
+			}
+			if res.Download != nil || res.Upload != nil || res.Idle == nil || res.Idle.Samples != 1 || attempts.Load() != 2 {
+				t.Errorf("completed idle samples must survive caller cancellation: %+v", res)
+			}
+			if len(res.Target.LocalIPs) == 0 || len(res.Target.ResolvedIPs) == 0 || hasWarning(res, "idle timeout") {
+				t.Errorf("network identity or parent priority lost: %+v", res)
+			}
 		})
-	}, nil, true)
-	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
-	defer cancel()
-	res, err := Run(ctx, Target{ConfigURL: srv.URL + server.ConfigPath}, Options{HTTPClient: insecureClient(), IdleProbes: 1000})
-	if !errors.Is(err, context.DeadlineExceeded) || res == nil || !res.Cancelled || res.Download != nil || res.Idle != nil {
-		t.Errorf("err=%v res=%+v", err, res)
 	}
 }
 
@@ -321,7 +343,7 @@ func TestEventStream(t *testing.T) {
 func TestMaxFlowsDefaultAndOptionsDefaults(t *testing.T) {
 	o := Options{}.withDefaults()
 	if o.MaxDuration != DefaultMaxDuration || o.MaxBytes != 0 || DefaultMaxBytes != 0 || o.MaxFlows != DefaultMaxFlows ||
-		o.IdleProbes != DefaultIdleProbes || o.ConfigTimeout != DefaultConfigTimeout || o.HTTPClient == nil || o.Logger == nil || o.clock == nil {
+		o.IdleProbes != DefaultIdleProbes || o.IdleTimeout != DefaultIdleTimeout || o.ConfigTimeout != DefaultConfigTimeout || o.HTTPClient == nil || o.Logger == nil || o.clock == nil {
 		t.Errorf("%+v", o)
 	}
 	if (Options{IdleProbes: -1}).withDefaults().IdleProbes != -1 {
@@ -329,6 +351,15 @@ func TestMaxFlowsDefaultAndOptionsDefaults(t *testing.T) {
 	}
 	if (Options{MaxBytes: -5}).withDefaults().MaxBytes != 0 {
 		t.Error("negative MaxBytes must mean unlimited")
+	}
+	for _, d := range []time.Duration{0, -time.Second, 123 * time.Millisecond} {
+		want := d
+		if d <= 0 {
+			want = 10 * time.Second
+		}
+		if got := (Options{IdleTimeout: d}).withDefaults().IdleTimeout; got != want {
+			t.Errorf("IdleTimeout=%s: got %s, want %s", d, got, want)
+		}
 	}
 	for _, tc := range []struct {
 		d    Directions

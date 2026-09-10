@@ -64,6 +64,7 @@ res, err := netquality.Run(ctx, netquality.Cloudflare, netquality.Options{
     MaxDuration: 10 * time.Second, // per direction; the budget
     MaxBytes:    100 << 20,        // optional: only on metered links
     MaxFlows:    8,
+    IdleTimeout: 5 * time.Second, // budget for all idle probes together
 })
 if err != nil { /* discovery failed, or ctx cancelled (res is then partial) */ }
 fmt.Println(res.Download.RPM, res.Download.ThroughputBPS, res.Download.Truncated)
@@ -102,6 +103,7 @@ nq --well-known nq.example.com:8443 [--insecure]
 nq --config-url https://host/path/config
 nq --download-only | --upload-only
 nq --max-duration 8s --max-flows 8          # time is the budget
+nq --idle-timeout 5s                       # cap the whole idle measurement phase
 nq --max-bytes 100MB                         # metered link: add a byte cap
 nq --json                            # Result as one JSON document on stdout
 nq --events                          # JSON-lines progress on stderr
@@ -215,20 +217,40 @@ compromise) and transparent TCP-level proxies that pass TLS through untouched
 
 | Limit | Default | Effect |
 |---|---|---|
+| `ConfigTimeout` | 10 s | bounds discovery; failure returns no result |
+| `IdleTimeout` | 10 s | bounds all idle probes together; keeps completed samples, warns, then proceeds to load |
 | `MaxDuration` | 12 s per direction | the budget: phase ends; if not yet stable → `truncated`, `reason=duration_cap`. Cost ≤ rate × 12 s |
 | `MaxBytes` | **none** (opt-in) | set on metered links; phase ends → `reason=bytes_cap` |
 | `MaxFlows` | 16 | never more concurrent load connections |
 | `ctx` cancellation | – | all flows stop within ~200 ms; partial result, `cancelled=true` |
 
-There are no retries, no background goroutines after `Run` returns, and no
-telemetry.
+The combined phase budget is `ConfigTimeout + IdleTimeout + N × MaxDuration`,
+where N is the selected direction count; omit `IdleTimeout` when idle is
+skipped. Defaults total 44 s for both directions, 32 s for one, or 34 s for
+both with idle skipped. An earlier caller deadline stops the run and retains
+completed idle samples and other partial results. Zero or negative duration
+options select defaults, so they cannot disable the bounds.
+`IdleTimeout` does not grow with `IdleProbes`. Larger sample sets and healthy
+slow paths may need a larger timeout to complete all probes and obtain the
+requested percentiles. An idle-timeout warning means the measurement budget
+ran out; it does not by itself diagnose a faulty connection.
+
+Return time also includes local orchestration and prompt teardown. Supplied
+transports, dialers, body closers, event sinks, and log handlers must honor
+cancellation where applicable and return promptly; the library cannot
+forcibly stop caller code. Runner goroutines join and owned sockets close
+before return. A custom TLS dialer still executing at teardown has its
+connection closed when it hands it over. There are no retries or telemetry.
+
+The client's `--idle-timeout` measures the whole idle probing phase; the
+server's flag of the same name limits quiet connections between requests.
 
 ## Deviations from the draft
 
 | Item | Draft | Here | Why |
 |---|---|---|---|
 | Interval (ID) | 5 s | **1 s** | 4 intervals must complete before stability can be declared; with the 12 s per-direction budget a 5 s interval could never stabilise. Earlier drafts and shipping tools use 1 s. Configurable via `Stability.Interval`. |
-| Time budget | "implementations may" limit | mandatory `MaxDuration`; `MaxBytes` opt-in | Runs on other people's machines and networks; a time bound makes cost proportional to the link instead of unbounded. |
+| Time budget | "implementations may" limit | mandatory discovery, idle, and per-direction time caps; `MaxBytes` opt-in | Runs on other people's machines and networks; a time bound makes cost proportional to the link instead of unbounded. |
 | Byte cap default | (handoff spec: 250 MB) | none | A fixed byte cap starves fast links of the intervals a confident RPM needs (≈ 8 × rate); the caller knows which networks are metered, the library cannot. |
 | Flow error | abort the test | abort the **phase**, report `reason=flow_error`, keep other results | Partial data with a flag beats none. |
 | Self probes on HTTP/1.1 | use TCP RTT estimate | omitted; RPM from foreign probes only, warning recorded | TCP_INFO is not portable in pure Go. |
@@ -242,7 +264,7 @@ telemetry.
 | Config field names | `*_download_url`, `upload_url` | also accepts Apple/Cloudflare `*_https_*` names, preferring them | Interop with deployed servers. |
 | Cloudflare target | `mach` hardcodes `h3.speed.cloudflare.com` URLs | uses `aim.cloudflare.com/responsiveness/api/v1/config`, which returns the same URLs | Keeps discovery uniform. |
 
-Other constants: `IdleProbes=5` (enough for a median, cheap), `ConfigTimeout=10s`,
+Other constants: `IdleProbes=5` (enough for a median, cheap), `ConfigTimeout=10s`, `IdleTimeout=10s`,
 in-flight probe cap 64 (bounds goroutines on high-RTT links), TLS handshake
 normalised to 1 RTT for TLS 1.3 and 2 for TLS 1.2.
 

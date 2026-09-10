@@ -5,7 +5,24 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- `Options.IdleTimeout` and `nq --idle-timeout` bound the entire idle probing
+  phase (default 10 s). A stalled idle response now times out, preserves any
+  completed samples, warns, and allows the selected load phases to run (#39).
+  This flat cap also applies to healthy slow paths and existing callers with
+  large `IdleProbes` values; raise `IdleTimeout` to collect more samples and
+  reach higher percentile thresholds.
+
 ### Fixed
+- Idle-timeout warnings retain the preceding probe error and are omitted
+  when all requested idle samples have already completed (#39).
+- Caller cancellation retains completed idle samples in partial results;
+  caller deadlines during load report `cancelled` rather than the phase's
+  `duration_cap`. Discovery, idle, and load phase budgets are documented
+  together with their teardown and caller-code limitations (#39).
+- Cancellation closes an upload's response body and joins its cleanup, so
+  an HTTP/2 upload peer that responds early and then stops reading cannot
+  leave the client waiting on flow control after its deadline (#39).
 - Connections opened through a caller-supplied `DialTLSContext` (or `DialTLS`)
   were not tracked, so an HTTP/2 connection still winding down when `Run`
   returned outlived it — for ever, on a transport without `IdleConnTimeout`.

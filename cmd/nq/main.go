@@ -48,6 +48,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		maxBytes     = fs.String("max-bytes", "", "per-direction byte cap for metered links (e.g. 100MB, 1GB); omitted = no cap, time bounds the run")
 		maxFlows     = fs.Int("max-flows", netquality.DefaultMaxFlows, "maximum concurrent load connections")
 		idleProbes   = fs.Int("idle-probes", netquality.DefaultIdleProbes, "number of idle latency probes")
+		idleTimeout  = fs.Duration("idle-timeout", netquality.DefaultIdleTimeout, "time cap for all idle probes; increase for more probes or slow paths")
 		interval     = fs.Duration("interval", 0, "stability interval (default 1s; draft says 5s)")
 		insecure     = fs.Bool("insecure", false, "skip TLS certificate verification (self-hosted dev servers)")
 		authToken    = fs.String("auth-token", os.Getenv("NQ_AUTH_TOKEN"), "bearer token for a protected server (env NQ_AUTH_TOKEN)")
@@ -103,6 +104,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		MaxBytes:    mb,
 		MaxFlows:    *maxFlows,
 		IdleProbes:  *idleProbes,
+		IdleTimeout: *idleTimeout,
 	}
 	opts.Stability.Interval = *interval
 	if *authToken != "" {

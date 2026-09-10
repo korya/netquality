@@ -31,7 +31,9 @@ directory relative to the repo root; `.` is the library.
 | Skipping | `IdleProbes < 0` skips the phase | . | TestRunDirections |
 | Cancellation | Parent cancellation/deadline retains completed idle samples and addresses, omits load, and wins over the idle cap (LIM-4) | . | TestCancelDuringIdle |
 | Idle cap | HTTP/1.1 and HTTP/2 stalls before headers or in the body end the whole idle phase, retain samples, warn once, close owned sockets, and continue load (LIM-8) | . | TestIdleTimeout |
-| Phase budgets | Injected discovery/idle/load deadlines are canceled on return; skipped idle has none; early HTTP/2 upload responses with stalled request reads cannot block teardown (LIM-9) | . | TestPhaseTimeoutBudgets |
+| Phase budgets | Injected discovery/idle/load deadlines are canceled on return; skipped idle has none; elapsed return fits budgets plus a scheduling/teardown allowance; early HTTP/2 upload responses with stalled request reads cannot block teardown (LIM-9) | . | TestPhaseTimeoutBudgets |
+| Idle timeout diagnostics | Retain the preceding HTTP failure when a later probe times out; a deadline after the final completed sample does not warn (LIM-8) | . | TestIdleTimeoutDiagnostics |
+| Cancellation at phase event | A synchronous sink can cancel between the outer guard and load admission; no direction result or load request is created (LIM-4) | . | TestCancelAtLoadPhaseEvent |
 | Caller deadline | Parent deadline during load reports cancelled, retaining the current direction and omitting later load (LIM-4) | . | TestCallerDeadlineDuringLoad |
 | TLS normalisation | TLS 1.2 handshake counted as 2 RTTs, TLS 1.3 as 1 | . | TestTLS12Normalisation |
 | Statistics | min/median/mean/max/jitter; no percentile at 4 samples | internal/engine | TestStatsOf |

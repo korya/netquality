@@ -53,8 +53,14 @@ func TestIdleTimeout(t *testing.T) {
 						Directions: Download, MaxDuration: 100 * time.Millisecond, MaxBytes: 1 << 20,
 					}, func(e Event) {
 						if e.Kind == EventPhase && e.Phase == "download" {
-							if n := sockets.open.Load(); n != 0 {
-								t.Errorf("idle left %d owned sockets open before load", n)
+							// A custom TLS dial can still be handing its socket
+							// over after cancellation; match TestNoLeaksAcrossRuns.
+							closed := sockets.open.Load() == 0
+							if h2 {
+								closed = eventually(time.Second, func() bool { return sockets.open.Load() == 0 })
+							}
+							if !closed {
+								t.Errorf("idle left %d owned sockets open before load", sockets.open.Load())
 							}
 							loading.Store(true)
 						}
@@ -148,6 +154,7 @@ func TestPhaseTimeoutBudgets(t *testing.T) {
 			defer cancel()
 			watchdog := time.AfterFunc(5*time.Second, cancel)
 			defer watchdog.Stop()
+			started := time.Now()
 			res, err := RunWithEvents(ctx, Target{ConfigURL: srv.URL + server.ConfigPath}, Options{
 				HTTPClient: insecureClient(), ConfigTimeout: time.Second, IdleTimeout: 200 * time.Millisecond,
 				IdleProbes: tc.idle, Directions: tc.dir, MaxDuration: 100 * time.Millisecond, clock: clock,
@@ -156,6 +163,7 @@ func TestPhaseTimeoutBudgets(t *testing.T) {
 					loading.Store(true)
 				}
 			})
+			elapsed := time.Since(started)
 			if err != nil || res == nil || res.Cancelled {
 				t.Fatalf("phase budget did not bound run: res=%+v err=%v", res, err)
 			}
@@ -184,6 +192,15 @@ func TestPhaseTimeoutBudgets(t *testing.T) {
 			defer clock.mu.Unlock()
 			if !reflect.DeepEqual(clock.durations, want) {
 				t.Errorf("timeout creation: got %v, want %v", clock.durations, want)
+			}
+			var budget time.Duration
+			for _, d := range want {
+				budget += d
+			}
+			// Include generous scheduling/teardown allowance for CI. Exact
+			// configured budgets are asserted above; this catches slow returns.
+			if elapsed > budget+2*time.Second {
+				t.Errorf("Run took %s for phase budget %s plus 2s allowance", elapsed, budget)
 			}
 			for i, child := range clock.contexts {
 				if child.Err() == nil {
@@ -216,5 +233,93 @@ func TestCallerDeadlineDuringLoad(t *testing.T) {
 	}
 	if res.Download.Reason != ReasonCancelled || res.Upload != nil {
 		t.Errorf("parent deadline must cancel the current phase and omit later phases: %+v", res)
+	}
+}
+
+func TestIdleTimeoutDiagnostics(t *testing.T) {
+	for _, completed := range []bool{false, true} {
+		t.Run(fmt.Sprintf("completed=%v", completed), func(t *testing.T) {
+			var attempts atomic.Int64
+			var loading atomic.Bool
+			srv := startServer(t, server.Options{}, func(h http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.URL.Path == server.SmallPath && !loading.Load() && !completed {
+						if attempts.Add(1) == 1 {
+							w.WriteHeader(http.StatusForbidden)
+							return
+						}
+						<-r.Context().Done()
+						return
+					}
+					h.ServeHTTP(w, r)
+				})
+			}, nil, true)
+			probes := 2
+			if completed {
+				probes = 1
+			}
+			clock := &budgetClock{}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			watchdog := time.AfterFunc(5*time.Second, cancel)
+			defer watchdog.Stop()
+			res, err := RunWithEvents(ctx, Target{ConfigURL: srv.URL + server.ConfigPath}, Options{
+				HTTPClient: insecureClient(), IdleProbes: probes, IdleTimeout: 500 * time.Millisecond,
+				Directions: Download, MaxDuration: 100 * time.Millisecond, MaxBytes: 1 << 20, clock: clock,
+			}, func(e Event) {
+				if completed && e.Kind == EventProbe && e.Phase == "idle" {
+					// Force the deadline to land after the final successful sample,
+					// before idle examines its context. Production sinks return promptly.
+					clock.mu.Lock()
+					idleContext := clock.contexts[1] // discovery then idle
+					clock.mu.Unlock()
+					<-idleContext.Done()
+				}
+				if e.Kind == EventPhase && e.Phase == "download" {
+					loading.Store(true)
+				}
+			})
+			if err != nil || res == nil || res.Cancelled || res.Download == nil {
+				t.Fatalf("idle outcome must allow load: result=%+v err=%v", res, err)
+			}
+			if completed {
+				if res.Idle == nil || res.Idle.Samples != probes || hasWarning(res, "idle timeout") {
+					t.Errorf("completed sample set must not warn about idle timeout: %+v", res)
+				}
+			} else if res.Idle != nil || !hasWarning(res, "idle timeout") || !hasWarning(res, "last probe error: unexpected status 403 Forbidden") || attempts.Load() != 2 {
+				t.Errorf("preceding probe failure lost: result=%+v attempts=%d", res, attempts.Load())
+			}
+		})
+	}
+}
+
+func TestCancelAtLoadPhaseEvent(t *testing.T) {
+	for _, dir := range []Directions{Download, Upload} {
+		t.Run(dir.String(), func(t *testing.T) {
+			var requests atomic.Int64
+			srv := startServer(t, server.Options{}, func(h http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.URL.Path == server.LargePath || r.URL.Path == server.UploadPath {
+						requests.Add(1)
+					}
+					h.ServeHTTP(w, r)
+				})
+			}, nil, true)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			res, err := RunWithEvents(ctx, Target{ConfigURL: srv.URL + server.ConfigPath}, Options{
+				HTTPClient: insecureClient(), IdleProbes: -1, Directions: dir,
+			}, func(e Event) {
+				if e.Kind == EventPhase && e.Phase == dir.String() {
+					cancel() // runs between the outer guard and loadPhase's guard
+				}
+			})
+			if err != context.Canceled || res == nil || !res.Cancelled {
+				t.Fatalf("phase event cancellation: result=%+v err=%v", res, err)
+			}
+			if res.Download != nil || res.Upload != nil || requests.Load() != 0 {
+				t.Errorf("cancellation must prevent load admission: result=%+v requests=%d", res, requests.Load())
+			}
+		})
 	}
 }

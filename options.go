@@ -84,6 +84,8 @@ type Options struct {
 	// each probe. On expiry, successful samples are kept, a warning is recorded,
 	// and the selected load phases still run. Non-positive values use the
 	// default. An earlier caller deadline or cancellation stops the whole run.
+	// A healthy slow path or a larger IdleProbes count may require a larger
+	// IdleTimeout to collect all requested samples and their percentiles.
 	IdleTimeout time.Duration
 	// Stability holds the draft's algorithm parameters; zero fields use
 	// defaults. SendBufferBytes applies to upload phases only and defaults to

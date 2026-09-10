@@ -244,6 +244,9 @@ func (r *runner) idle(ctx context.Context) (*LatencyStats, error) {
 		}
 		s, err := foreignProbe(ctx, rt, r.cfg.SmallDownloadURL, r.opts.Header, r.opts.clock.Mono, r.observeTLS)
 		if err != nil {
+			if ctx.Err() != nil && errors.Is(err, ctx.Err()) {
+				break // retain the preceding probe failure as timeout context
+			}
 			lastErr = err
 			continue
 		}
@@ -255,8 +258,12 @@ func (r *runner) idle(ctx context.Context) (*LatencyStats, error) {
 		stats := engine.ComputeLatencyStats(samples)
 		st = &stats
 	}
-	if ctx.Err() != nil {
-		return st, fmt.Errorf("idle timeout (%s; %d/%d probes completed): %w", r.opts.IdleTimeout, len(samples), r.opts.IdleProbes, ctx.Err())
+	if ctx.Err() != nil && len(samples) < r.opts.IdleProbes {
+		err := fmt.Errorf("idle timeout (%s; %d/%d probes completed): %w", r.opts.IdleTimeout, len(samples), r.opts.IdleProbes, ctx.Err())
+		if lastErr != nil {
+			err = fmt.Errorf("%w; last probe error: %v", err, lastErr)
+		}
+		return st, err
 	}
 	if st == nil {
 		if lastErr == nil {

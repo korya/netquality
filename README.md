@@ -230,6 +230,10 @@ skipped. Defaults total 44 s for both directions, 32 s for one, or 34 s for
 both with idle skipped. An earlier caller deadline stops the run and retains
 completed idle samples and other partial results. Zero or negative duration
 options select defaults, so they cannot disable the bounds.
+`IdleTimeout` does not grow with `IdleProbes`. Larger sample sets and healthy
+slow paths may need a larger timeout to complete all probes and obtain the
+requested percentiles. An idle-timeout warning means the measurement budget
+ran out; it does not by itself diagnose a faulty connection.
 
 Return time also includes local orchestration and prompt teardown. Supplied
 transports, dialers, body closers, event sinks, and log handlers must honor

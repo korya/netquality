@@ -52,6 +52,14 @@ warning names the timeout and successful/requested probe counts. An idle
 timeout alone does not cancel the run: selected load phases still execute
 with their own budgets. An earlier caller cancellation or deadline stops
 the run instead (LIM-4). Skipping idle measurement creates no idle deadline.
+The cap does not scale with `IdleProbes`. A healthy slow path or a larger
+probe count may exhaust it; callers needing all requested samples must
+budget enough time for their sequential fresh-connection probes by raising
+`IdleTimeout`. Ten seconds is a configurable product default, not a latency
+threshold that distinguishes a healthy path from a faulty one.
+A timeout warning retains the last preceding probe error when available.
+If every requested sample completed, a deadline observed afterwards does
+not produce an idle-timeout warning; caller cancellation still wins (LIM-4).
 
 ### LIM-9: Combined phase budget
 Before network work begins, the combined phase budget is `ConfigTimeout`

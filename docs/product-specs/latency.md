@@ -46,8 +46,12 @@ defined as the mean absolute deviation from the mean. Percentiles use the
 nearest-rank method and appear only when the sample count makes them distinct
 from the maximum: `p80` from 5 samples, `p90` from 10, `p95` from 20, `p99`
 from 100. A percentile field never holds a lower percentile than its name;
-an absent field means too few samples. With the default 5 idle probes the
-idle set reports `p80`; loaded sets usually report all four.
+an absent field means too few samples. When all 5 default idle probes
+complete, the idle set reports `p80`; loaded sets usually report all four.
+For idle percentiles, requesting more probes does not increase the phase
+budget. Increase `IdleTimeout` as needed along with `IdleProbes`, especially
+on slow paths: only samples completed within that budget count towards
+these thresholds, even when every response would eventually succeed.
 
 ### LAT-8: Combined loaded latency
 `loaded.combined` merges foreign and self samples using each probe's

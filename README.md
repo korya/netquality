@@ -255,6 +255,14 @@ accounted budget. `MaxBytes` is not an exact wire-byte limit. Invalid-size
 warnings are limited to one per phase/probe kind; load continues with only
 valid latency samples.
 
+The ten-byte response ceiling is fixed; there is no caller override. A server
+that changes its small response above ten bytes becomes incompatible with
+latency probing. Load continues to collect capacity measurements within the
+configured budgets, even if every probe fails; loaded latency is then absent
+and RPM is zero. Set `MaxBytes` and `MaxDuration` to bound that cost.
+[Dated compatibility checks](testdata/config/README.md) record the observed
+Apple and Cloudflare response sizes and how to repeat the small GETs.
+
 ## Deviations from the draft
 
 | Item | Draft | Here | Why |
@@ -270,7 +278,7 @@ valid latency samples.
 | Capacity change | – | a > 25 % goodput drop restarts stability tracking | The draft averages across the change. |
 | Responsiveness window | last MAD intervals | every sample since throughput became stable (`loaded_window`) | Foreign probes are sparse (a TLS handshake each); a fixed 4-tick window could hold self samples and no foreign ones, which read as "no fresh connection ever succeeded". Stability is still judged on the draft's window. |
 | Probe byte accounting | – | foreign 5000 B, self 1000 B (draft's estimates) | Counted against `MaxBytes` and the 5 % capacity rule. |
-| Small response size | 1 byte | complete nonempty bodies up to 10 bytes accepted | Preserve Cloudflare's advertised ten-byte probe; reject empty and larger bodies before they become latency samples. |
+| Small response size | 1 byte | complete nonempty bodies up to 10 bytes accepted; fixed ceiling, no override | Preserve Cloudflare's advertised ten-byte probe; reject empty and larger bodies before they become latency samples. |
 | Config `version` | must be `1` | `1` or `"1"` accepted | Lenient on the wire, strict on everything else (duplicates, hosts, scheme). |
 | Config field names | `*_download_url`, `upload_url` | also accepts Apple/Cloudflare `*_https_*` names, preferring them | Interop with deployed servers. |
 | Cloudflare target | `mach` hardcodes `h3.speed.cloudflare.com` URLs | uses `aim.cloudflare.com/responsiveness/api/v1/config`, which returns the same URLs | Keeps discovery uniform. |

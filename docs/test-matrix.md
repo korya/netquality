@@ -56,6 +56,9 @@ directory relative to the repo root; `.` is the library.
 | Stability algorithm | Draft moving-average criterion, confidence levels (table) | internal/engine | TestStabilityTracker |
 | Stability algorithm | Moving-average window arithmetic | internal/engine | TestStabilityTrackerMovingAverage |
 | Stability parameters | Defaults and partial overrides | internal/engine | TestDefaultStabilityParams |
+| Public API | Every StabilityParams field survives the round trip to the engine | . | TestStabilityParamsConvertsEveryField |
+| Public API | Every LatencyStats field, stage medians included, reaches the Result | . | TestLatencyStatsConvertsEveryField |
+| Public API | Public types and their engine counterparts stay field-for-field identical | . | TestPublicTypesMirrorEngineTypes |
 | Stability algorithm | Windowed series (responsiveness) judged on its values, not on averages of averages | internal/engine | TestWindowedTrackerJudgesValuesOnce |
 | Flow ramp | One flow per interval up to MaxFlows (fake clock) | . | TestMaxFlowsWithFakeClock |
 | HTTP/1.1 fallback | No self probes, RPM from foreign probes, warning | . | TestHTTP11Fallback |

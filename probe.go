@@ -9,13 +9,15 @@ import (
 	"net/http"
 	"net/http/httptrace"
 	"sync"
+
+	"github.com/korya/netquality/internal/engine"
 )
 
 // probeTimes collects httptrace timestamps. HTTP/2 invokes trace hooks from
 // several goroutines, so every access is under the mutex.
 type probeTimes struct {
 	mu                                   sync.Mutex
-	s                                    LatencySample
+	s                                    engine.LatencySample
 	dnsStart, connStart, tlsStart, wrote instant
 	reused                               bool
 }
@@ -35,7 +37,7 @@ var errInvalidProbeSize = errors.New("invalid probe response size")
 // foreignProbe performs a GET of the small URL on a brand-new connection and
 // records per-stage timings. rt must not reuse connections.
 // observe, if non-nil, receives the TLS state of every successful handshake.
-func foreignProbe(ctx context.Context, rt http.RoundTripper, url string, extra http.Header, now func() instant, observe func(tls.ConnectionState)) (LatencySample, error) {
+func foreignProbe(ctx context.Context, rt http.RoundTripper, url string, extra http.Header, now func() instant, observe func(tls.ConnectionState)) (engine.LatencySample, error) {
 	pt := &probeTimes{}
 	start := now()
 	lock := func(f func()) { pt.mu.Lock(); defer pt.mu.Unlock(); f() }
@@ -85,7 +87,7 @@ func foreignProbe(ctx context.Context, rt http.RoundTripper, url string, extra h
 		},
 	}
 	if err := doProbe(httptrace.WithClientTrace(ctx, trace), rt, url, extra); err != nil {
-		return LatencySample{}, err
+		return engine.LatencySample{}, err
 	}
 	end := now()
 	pt.mu.Lock()
@@ -140,7 +142,7 @@ func doProbe(ctx context.Context, rt http.RoundTripper, url string, extra http.H
 
 // selfProbe performs a GET of the small URL on an existing (load) transport.
 // Only the request-to-full-response time is meaningful.
-func selfProbe(ctx context.Context, rt http.RoundTripper, url string, extra http.Header, now func() instant) (LatencySample, error) {
+func selfProbe(ctx context.Context, rt http.RoundTripper, url string, extra http.Header, now func() instant) (engine.LatencySample, error) {
 	pt := &probeTimes{}
 	start := now()
 	trace := &httptrace.ClientTrace{
@@ -151,7 +153,7 @@ func selfProbe(ctx context.Context, rt http.RoundTripper, url string, extra http
 		},
 	}
 	if err := doProbe(httptrace.WithClientTrace(ctx, trace), rt, url, extra); err != nil {
-		return LatencySample{}, err
+		return engine.LatencySample{}, err
 	}
 	end := now()
 	pt.mu.Lock()
@@ -160,7 +162,7 @@ func selfProbe(ctx context.Context, rt http.RoundTripper, url string, extra http
 	if wr.isZero() {
 		wr = start
 	}
-	return LatencySample{Total: end.sub(start), HTTP: end.sub(wr)}, nil
+	return engine.LatencySample{Total: end.sub(start), HTTP: end.sub(wr)}, nil
 }
 
 // setProbeHeaders applies the headers every test request carries, then the

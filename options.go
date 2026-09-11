@@ -2,7 +2,6 @@ package netquality
 
 import (
 	"context"
-	"github.com/korya/netquality/internal/engine"
 	"log/slog"
 	"net/http"
 	"time"
@@ -31,14 +30,46 @@ func (d Directions) String() string {
 	}
 }
 
-// StabilityParams are the draft's algorithm parameters (Section 5.2); see the
-// engine package for field documentation.
-type StabilityParams = engine.StabilityParams
+// StabilityParams are the draft's algorithm parameters (Section 5.2). Every
+// zero field selects its default, which is the draft-09 value except for
+// Interval: 1s instead of 5s, so that a phase can stabilise within the 12s
+// MaxDuration budget (see README "Deviations").
+type StabilityParams struct {
+	// MovingAverageDistance (MAD): number of intervals in the moving average.
+	MovingAverageDistance int
+	// Interval (ID): how often stability is re-evaluated and flows are added.
+	Interval time.Duration
+	// TrimmedMeanPercent (TMP): single-sided trimmed-mean percentile for latency.
+	TrimmedMeanPercent float64
+	// StdDevTolerance (SDT): stability is declared when the standard deviation of
+	// the last MAD moving averages is below this fraction of the current one.
+	StdDevTolerance float64
+	// InitialFlows (INP) and FlowIncrement (INC). The ramp doubles the flow
+	// count at each step; FlowIncrement is the floor of a step.
+	InitialFlows  int
+	FlowIncrement int
+	// MaxProbesPerSecond (MPS) and ProbeCapacityPercent (PTC).
+	MaxProbesPerSecond   int
+	ProbeCapacityPercent float64
 
-// DefaultStabilityParams returns the draft-09 defaults, except Interval, which
-// is 1s instead of 5s so that a phase can stabilise within the 12s MaxDuration
-// budget (see README "Deviations").
-func DefaultStabilityParams() StabilityParams { return engine.DefaultStabilityParams() }
+	// The following are netquality's extensions (README "Deviations").
+
+	// SendBufferBytes is the per-flow credit the transport accepts before
+	// bytes reach the wire (HTTP/2 stream window plus socket buffer). An
+	// interval in which the credit of newly opened flows exceeds
+	// StdDevTolerance of the interval's goodput is a drain interval: it is
+	// neither measured nor used for decisions. 0 (the default) disables it;
+	// the I/O layer sets it for uploads, where bytes are counted on hand-over.
+	SendBufferBytes int64
+	// RampGainTolerance stops the flow ramp: after an add, if goodput grew by
+	// less than this fraction the link is saturated and no more flows open.
+	// Negative never stops the ramp (flows are added up to the maximum).
+	RampGainTolerance float64
+	// ChangeTolerance restarts goodput stability tracking when a hold
+	// interval's goodput drops by more than this fraction below the moving
+	// average (a capacity change mid-run).
+	ChangeTolerance float64
+}
 
 // Default safety limits and probe counts.
 const (
@@ -134,7 +165,7 @@ func (o Options) withDefaults() Options {
 	if o.IdleTimeout <= 0 {
 		o.IdleTimeout = DefaultIdleTimeout
 	}
-	o.Stability = o.Stability.WithDefaults()
+	o.Stability = stabilityFrom(o.Stability.toEngine().WithDefaults())
 	if o.HTTPClient == nil {
 		o.HTTPClient = &http.Client{}
 	}

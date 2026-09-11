@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/korya/netquality/internal/engine"
 	"github.com/korya/netquality/server"
 )
 
@@ -104,7 +105,7 @@ func TestProbeResponseSize(t *testing.T) {
 				if (err == nil) != (tc.wantErr == "") {
 					t.Fatalf("sample=%+v err=%v; want %q", sample, err, tc.wantErr)
 				}
-				if err != nil && sample != (LatencySample{}) {
+				if err != nil && sample != (engine.LatencySample{}) {
 					t.Errorf("failed probe produced a sample: %+v", sample)
 				}
 				switch tc.wantErr {
@@ -200,7 +201,7 @@ func TestProbeRejectionPreservesLoad(t *testing.T) {
 			if mode == "deadline" {
 				want = context.DeadlineExceeded
 			}
-			if !errors.Is(err, want) || sample != (LatencySample{}) {
+			if !errors.Is(err, want) || sample != (engine.LatencySample{}) {
 				t.Fatalf("sample=%+v error=%v; want %v", sample, err, want)
 			}
 			mu.Lock()

@@ -44,13 +44,13 @@ type ServerConfig struct {
 // ignored per draft Section 8.1.
 var ErrInvalidConfig = errors.New("netquality: invalid server configuration")
 
-// ParseServerConfig parses a configuration document. It accepts both the draft
+// parseServerConfig parses a configuration document. It accepts both the draft
 // field names (small_download_url, large_download_url, upload_url) and the
 // older Apple/Cloudflare *_https_* names, preferring the https-prefixed ones
 // when both are present. Unknown fields are ignored. Duplicate keys, a missing
 // mandatory field, a version other than 1, or mismatched hosts make the
 // document invalid.
-func ParseServerConfig(data []byte) (*ServerConfig, error) {
+func parseServerConfig(data []byte) (*ServerConfig, error) {
 	var raw struct {
 		Version      *json.Number    `json:"version"`
 		TestEndpoint *string         `json:"test_endpoint"`

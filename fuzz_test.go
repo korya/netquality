@@ -21,7 +21,7 @@ func FuzzParseServerConfig(f *testing.F) {
 	f.Add([]byte(`[]`))
 	f.Add([]byte(``))
 	f.Fuzz(func(t *testing.T, data []byte) {
-		cfg, err := ParseServerConfig(data)
+		cfg, err := parseServerConfig(data)
 		if err != nil {
 			if cfg != nil {
 				t.Fatal("error with non-nil config")

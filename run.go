@@ -218,7 +218,7 @@ func (r *runner) discover(ctx context.Context, t Target) (*ServerConfig, error) 
 	if err != nil {
 		return nil, fmt.Errorf("netquality: read config: %w", err)
 	}
-	cfg, err := ParseServerConfig(body)
+	cfg, err := parseServerConfig(body)
 	if err != nil {
 		return nil, err
 	}

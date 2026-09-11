@@ -47,6 +47,19 @@ jobs:
       - uses: actions/setup-go@v7
         with: { go-version: '1.26.7' } # must match the `go` directive's minor in go.mod
       - run: go test -count=1 ./...
+  api-compat:
+    runs-on: ubuntu-latest
+    # Advisory until v1.0.0 is tagged, because breaking the API is still
+    # allowed and expected before then. Drop continue-on-error with the v1
+    # release so an accidental break blocks the merge (docs/guidelines.md).
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+        with: { fetch-depth: 0 } # the script compares against the newest tag
+      - uses: actions/setup-go@v7
+        with: { go-version: '1.27.0' }
+      - name: Public API vs the newest release
+        run: scripts/api-compat.sh
   fuzz:
     runs-on: ubuntu-latest
     steps:

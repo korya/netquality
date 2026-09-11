@@ -162,8 +162,9 @@ slot, including on cancellation or I/O failure; a panic conservatively charges
 the request cap. Config and small/probe requests do not consume slots.
 `--client-bytes -1` disables both byte budgeting and per-client admission slots.
 An explicit `--client-concurrency` then produces a warning, including with
-self-signed mode's default disabled budget; set a positive `--client-bytes`
-to enable both limits.
+self-signed mode's default disabled budget; set a sufficiently large positive
+`--client-bytes` to keep the concurrency bound while making byte refusal
+practically unreachable.
 
 The byte budget is **not a strict quota**. With concurrency C and the larger
 request cap R, outstanding admitted payload and concurrent overshoot beyond
@@ -182,9 +183,10 @@ simultaneous clients sharing an IP; use signed subjects to give devices separate
 budgets. A smaller cap can refuse a measurement with `429` and `flow_error`.
 
 **Stalled requests can deny a shared identity indefinitely.** Slots have no
-expiry: an upload that sends no body, or stalls after its first byte, keeps its
-slot until the handler exits. Filling the slots blocks large downloads and
-uploads for everyone sharing that identity, even after many byte refill
+expiry: an upload that sends no body, a download whose receiver stops reading,
+or either direction that stalls after its first byte keeps its slot until the
+handler exits. Filling the slots blocks large downloads and uploads for
+everyone sharing that identity, even after many byte refill
 windows. Connection idle timeouts do not reclaim active requests, and HTTP/2
 pings cannot detect a stalled body from a peer that still answers pings.
 Config and small/probe endpoints remain exempt. Use separately issued signed

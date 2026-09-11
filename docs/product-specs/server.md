@@ -85,9 +85,10 @@ requests, so a connection cap is not a request cap. With defaults, one identity
 can hit 32 active transfers before the server reaches 256 connections.
 
 If `--client-concurrency` is explicitly supplied while byte budgeting is
-disabled, `nqserver` warns that it is ignored and that a positive
-`--client-bytes` enables both limits. This includes self-signed mode's default
-disabled budget; omitting the concurrency flag produces no such warning.
+disabled, `nqserver` warns that it is ignored. A sufficiently large positive
+`--client-bytes` enables the concurrency bound while making byte refusal
+practically unreachable. This includes self-signed mode's default disabled
+budget; omitting the concurrency flag produces no such warning.
 
 ### SRV-9: Request and connection caps
 One upload request accepts at most `--upload-size` bytes (default 16 GiB) and

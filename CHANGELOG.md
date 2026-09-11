@@ -30,7 +30,8 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 - `nqserver` warns when an explicit `--client-concurrency` is ignored because
-  byte budgeting is disabled, including self-signed mode's default (#41).
+  byte budgeting is disabled, including self-signed mode's default; a large
+  positive byte budget can retain concurrency-only admission (#41).
 - Server budget admission and completion are accounted atomically, preventing
   unlimited concurrent overshoot. Cancellation and I/O errors settle actual
   bytes; panic unwinding releases the slot and charges the request cap.

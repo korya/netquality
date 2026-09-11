@@ -176,7 +176,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer, onListen 
 	if *clientMax < 0 {
 		fs.Visit(func(f *flag.Flag) {
 			if f.Name == "client-concurrency" {
-				fmt.Fprintln(stderr, "nqserver: warning: --client-concurrency is ignored because the client byte budget is disabled; set --client-bytes to a positive value to enable both limits")
+				fmt.Fprintln(stderr, "nqserver: warning: --client-concurrency is ignored because the client byte budget is disabled; set --client-bytes to a sufficiently large positive value to enable concurrency-only admission")
 			}
 		})
 	}

@@ -36,7 +36,7 @@ func TestClientConcurrencyDisabledWarning(t *testing.T) {
 			if code != exitOK || !strings.Contains(out.String(), "listening on") {
 				t.Fatalf("startup: %d %s", code, &out)
 			}
-			warning := "warning: --client-concurrency is ignored because the client byte budget is disabled; set --client-bytes to a positive value to enable both limits"
+			warning := "warning: --client-concurrency is ignored because the client byte budget is disabled; set --client-bytes to a sufficiently large positive value to enable concurrency-only admission"
 			if got := strings.Contains(out.String(), warning); got != tc.warn {
 				t.Fatalf("warning = %v, want %v: %s", got, tc.warn, &out)
 			}

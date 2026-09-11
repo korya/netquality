@@ -52,7 +52,7 @@ Caller cancellation retains its precedence. Loaded size failures discard
 samples without aborting load. Warning messages contain no response body.
 
 ### RES-7: Events
-`RunWithEvents` delivers `phase` events for discover/idle/download/upload/done,
+A run with an event sink delivers `phase` events for discover/idle/download/upload/done,
 one `interval` event per completed interval with flows, moving-average
 throughput, bytes, and RPM once available, one `probe` event per successful
 probe (kind idle/foreign/self, latency), one `flow` event per flow added, and

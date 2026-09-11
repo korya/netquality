@@ -5,6 +5,30 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- **The public API no longer aliases internal types.** `LatencyStats`,
+  `StageMedians`, `Confidence` and `StabilityParams` were aliases of
+  `internal/engine` types, so pkg.go.dev showed callers a bare
+  `type StabilityParams = engine.StabilityParams` and none of the fields, and a
+  rename inside the engine broke importers with nothing to warn us. They are
+  declared in the library package now, with the documentation the aliases hid.
+  Field names, types and JSON tags are unchanged, so existing code compiles and
+  `schema_version` stays 1; only code that named `engine.*` types through an
+  alias is affected.
+- **`Run` is the only entry point.** `RunWithEvents` is gone; its sink is
+  `Options.Events`, which carries the same concurrency contract (RES-8).
+  Replace `RunWithEvents(ctx, t, o, sink)` with `Run(ctx, t, o)` after setting
+  `o.Events = sink`.
+- `ParseServerConfig`, `DefaultStabilityParams` and `LatencySample` are no
+  longer exported. Discovery happens inside `Run`, a zero `StabilityParams`
+  already selects the defaults, and no `Result` field ever reached a
+  `LatencySample`. `ErrInvalidConfig` stays exported for `errors.Is`.
+
+### Added
+- `scripts/api-compat.sh` and an advisory CI job report incompatible public API
+  changes since the newest release tag. It becomes blocking when v1.0.0 is
+  tagged.
+
 ## [0.5.0] - 2026-09-10
 
 This release puts a bound on the parts of a run, and of the reference

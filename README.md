@@ -79,7 +79,7 @@ on cancelled partial results too, and both stay in the result if you share it.
 Targets: `netquality.Apple`, `netquality.Cloudflare`, `netquality.WellKnown("host:port")`,
 or `netquality.Target{ConfigURL: "..."}`.
 
-`RunWithEvents` takes a `func(Event)` sink for progress bars. Proxies and TLS
+`Options.Events` takes a `func(Event)` sink for progress bars. Proxies and TLS
 settings come through `Options.HTTPClient` (its `*http.Transport` is cloned per
 flow so each flow owns a connection). `Options.Logger` accepts a `*slog.Logger`.
 

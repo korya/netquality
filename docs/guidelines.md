@@ -105,6 +105,11 @@ before blaming the code.
   commit, tag `vX.Y.Z`, push. The Release workflow builds, publishes, and
   triggers pkg.go.dev. Minor bump for features or compatibility changes,
   patch for fixes and docs.
+- `scripts/api-compat.sh` reports incompatible public API changes since the
+  newest tag; run it before a release. Its CI job is advisory while the API
+  may still break. Tagging v1.0.0 means dropping `continue-on-error` from the
+  `api-compat` job, after which an incompatible change needs a `/v2` module
+  path rather than a merge.
 
 ## Documentation
 

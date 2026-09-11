@@ -2,6 +2,7 @@ package main
 
 import (
 	"io"
+	"log"
 	"net/http/httptest"
 	"testing"
 
@@ -16,6 +17,7 @@ func BenchmarkCLIThroughput(b *testing.B) {
 				MaxClientBytes: -1,
 			}))
 			srv.EnableHTTP2 = h2
+			srv.Config.ErrorLog = log.New(io.Discard, "", 0)
 			srv.StartTLS()
 			b.Cleanup(srv.Close)
 			args := []string{

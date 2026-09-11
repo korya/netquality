@@ -7,6 +7,8 @@ import (
 	"net"
 	"testing"
 	"time"
+
+	"github.com/korya/netquality/internal/engine"
 )
 
 type benchmarkConn struct{}
@@ -51,7 +53,7 @@ func BenchmarkPhaseStateSamples(b *testing.B) {
 	p := &phaseState{cancel: func() {}}
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			p.addSample(false, LatencySample{Total: time.Nanosecond})
+			p.addSample(false, engine.LatencySample{Total: time.Nanosecond})
 			_, _ = p.take()
 		}
 	})

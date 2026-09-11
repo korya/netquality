@@ -37,7 +37,7 @@ func BenchmarkOwnedTransportTrackForget(b *testing.B) {
 
 func BenchmarkProbeTimesState(b *testing.B) {
 	pt := new(probeTimes)
-	now := instant{t: time.Now()}
+	now := monoNow()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			pt.mu.Lock()

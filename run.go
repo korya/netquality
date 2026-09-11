@@ -16,6 +16,7 @@ import (
 )
 
 // Run executes the responsiveness test against t and returns the Result.
+// Set Options.Events to follow the run as it happens.
 //
 // If ctx is cancelled mid-run, Run returns the partial Result (Cancelled=true)
 // together with ctx.Err(). If a load phase fails before completing an
@@ -23,14 +24,8 @@ import (
 // reason=flow_error, everything measured before it intact) together with the
 // error. Only discovery failures return a nil Result.
 func Run(ctx context.Context, t Target, o Options) (*Result, error) {
-	return RunWithEvents(ctx, t, o, nil)
-}
-
-// RunWithEvents is Run with a progress sink. sink may be nil; otherwise it
-// must be safe for concurrent use, because flow and probe goroutines call it
-// (see Event).
-func RunWithEvents(ctx context.Context, t Target, o Options, sink func(Event)) (*Result, error) {
-	r := &runner{opts: o.withDefaults(), sink: sink}
+	opts := o.withDefaults()
+	r := &runner{opts: opts, sink: opts.Events}
 	return r.run(ctx, t)
 }
 

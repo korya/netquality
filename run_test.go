@@ -55,16 +55,17 @@ func TestRunLoopback(t *testing.T) {
 		mu     sync.Mutex
 		events []Event
 	)
-	res, err := RunWithEvents(context.Background(), target, Options{
+	res, err := Run(context.Background(), target, Options{
 		HTTPClient:  client,
 		MaxDuration: 3 * time.Second,
 		MaxBytes:    1 << 40,
 		MaxFlows:    4,
 		Stability:   fastStability(),
-	}, func(e Event) {
-		mu.Lock()
-		defer mu.Unlock()
-		events = append(events, e)
+		Events: func(e Event) {
+			mu.Lock()
+			defer mu.Unlock()
+			events = append(events, e)
+		},
 	})
 	if err != nil {
 		t.Fatal(err)

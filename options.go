@@ -133,6 +133,12 @@ type Options struct {
 	HTTPClient *http.Client
 	// Logger receives debug logs; nil discards them.
 	Logger *slog.Logger
+	// Events receives progress notifications as the run proceeds; nil (the
+	// default) reports nothing and costs nothing. It is called synchronously
+	// from flow and probe goroutines, so calls can and do overlap: the
+	// function must be safe for concurrent use and must return promptly
+	// (RES-8). See Event for what is delivered.
+	Events func(Event)
 	// ConfigTimeout bounds config discovery (default 10s).
 	ConfigTimeout time.Duration
 	// Header is added to every request the test sends (config fetch, probes,

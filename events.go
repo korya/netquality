@@ -18,7 +18,7 @@ const (
 	EventWarning EventKind = "warning"
 )
 
-// Event is a progress notification delivered to RunWithEvents' sink. Sinks are
+// Event is a progress notification delivered to Options.Events. Sinks are
 // called synchronously from the flow and probe goroutines, so calls can and do
 // overlap: a sink must be safe for concurrent use and must return promptly
 // (RES-8).

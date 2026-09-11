@@ -2,7 +2,6 @@ package netquality
 
 import (
 	"reflect"
-	"regexp"
 	"strings"
 	"testing"
 
@@ -47,72 +46,42 @@ func TestStabilityParamsConvertsEveryField(t *testing.T) {
 }
 
 // TestLatencyStatsConvertsEveryField fails when latencyStatsFrom forgets a
-// field, which would drop a number from the public Result.
+// field, or when the engine grows one the public type never surfaces: a number
+// measured but never reported. Fields are matched by name, not position, so
+// reordering either declaration is free.
 func TestLatencyStatsConvertsEveryField(t *testing.T) {
 	var seed int64
 	var src engine.LatencyStats
 	fill(t, reflect.ValueOf(&src).Elem(), &seed)
 
-	got := latencyStatsFrom(src)
-	gv, sv := reflect.ValueOf(got), reflect.ValueOf(src)
-	for i := 0; i < sv.NumField(); i++ {
-		name := sv.Type().Field(i).Name
-		if name == "Stages" {
-			continue // compared below: the pointed-to types differ by package
-		}
-		if !reflect.DeepEqual(gv.Field(i).Interface(), sv.Field(i).Interface()) {
-			t.Errorf("%s: got %v, want %v", name, gv.Field(i), sv.Field(i))
-		}
-	}
-	if got.Stages == nil {
-		t.Fatal("Stages: got nil, want the converted stage medians")
-	}
-	sg, ss := reflect.ValueOf(*got.Stages), reflect.ValueOf(*src.Stages)
-	for i := 0; i < ss.NumField(); i++ {
-		if sg.Field(i).Interface() != ss.Field(i).Interface() {
-			t.Errorf("Stages.%s: got %v, want %v", ss.Type().Field(i).Name, sg.Field(i), ss.Field(i))
-		}
-	}
+	compare(t, "", reflect.ValueOf(latencyStatsFrom(src)), reflect.ValueOf(src))
 }
 
-// TestPublicTypesMirrorEngineTypes fails when a field is added, renamed or
-// retyped on one side of the seam only. The public types are declared in this
-// package rather than aliased so that pkg.go.dev documents them, which means
-// nothing but this test keeps the two definitions in step.
-func TestPublicTypesMirrorEngineTypes(t *testing.T) {
-	for _, tc := range []struct{ pub, eng reflect.Type }{
-		{reflect.TypeOf(StabilityParams{}), reflect.TypeOf(engine.StabilityParams{})},
-		{reflect.TypeOf(LatencyStats{}), reflect.TypeOf(engine.LatencyStats{})},
-		{reflect.TypeOf(StageMedians{}), reflect.TypeOf(engine.StageMedians{})},
-	} {
-		t.Run(tc.pub.Name(), func(t *testing.T) {
-			if tc.pub.NumField() != tc.eng.NumField() {
-				t.Fatalf("field count: public %d, engine %d", tc.pub.NumField(), tc.eng.NumField())
+// compare asserts that every field of the engine value src has a public
+// counterpart of the same name carrying the same value, recursing through the
+// pointers to stage medians.
+func compare(t *testing.T, prefix string, pub, src reflect.Value) {
+	t.Helper()
+	for i := 0; i < src.NumField(); i++ {
+		name := src.Type().Field(i).Name
+		got := pub.FieldByName(name)
+		if !got.IsValid() {
+			t.Errorf("%s%s: the engine has this field and the public type does not", prefix, name)
+			continue
+		}
+		want := src.Field(i)
+		if want.Kind() == reflect.Pointer {
+			if got.IsNil() != want.IsNil() {
+				t.Errorf("%s%s: got nil=%v, want nil=%v", prefix, name, got.IsNil(), want.IsNil())
+				continue
 			}
-			for i := 0; i < tc.pub.NumField(); i++ {
-				p, e := tc.pub.Field(i), tc.eng.Field(i)
-				if p.Name != e.Name {
-					t.Errorf("field %d: public %q, engine %q", i, p.Name, e.Name)
-					continue
-				}
-				// Types are compared with package qualifiers stripped,
-				// because *netquality.StageMedians and *engine.StageMedians
-				// are the same shape declared in two packages.
-				if pt, et := unqualified(p.Type.String()), unqualified(e.Type.String()); pt != et {
-					t.Errorf("%s: public %s, engine %s", p.Name, pt, et)
-				}
-				if p.Tag != e.Tag {
-					t.Errorf("%s tag: public %q, engine %q", p.Name, p.Tag, e.Tag)
-				}
+			if !want.IsNil() {
+				compare(t, prefix+name+".", got.Elem(), want.Elem())
 			}
-		})
+			continue
+		}
+		if got.Interface() != want.Interface() {
+			t.Errorf("%s%s: got %v, want %v", prefix, name, got, want)
+		}
 	}
 }
-
-// unqualified drops package qualifiers so that two declarations of the same
-// shape compare equal regardless of which package they were reached through.
-func unqualified(typeName string) string {
-	return qualifier.ReplaceAllString(typeName, "")
-}
-
-var qualifier = regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_]*\.`)

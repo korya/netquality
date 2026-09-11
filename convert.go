@@ -3,11 +3,11 @@ package netquality
 import "github.com/korya/netquality/internal/engine"
 
 // The engine holds the measurement algorithm and its own value types; the
-// public types above are declared here, in the library's own package, so that
+// public types are declared in this package, rather than aliased, so that
 // pkg.go.dev documents them and a refactor inside internal/engine cannot
 // silently change the public API. These converters are the only seam between
-// the two, and stabilityFieldParity in convert_test.go fails if the two
-// definitions drift apart.
+// the two. A renamed engine field fails to compile here; one added and not
+// carried across fails the conversion tests in convert_test.go.
 
 func (p StabilityParams) toEngine() engine.StabilityParams {
 	return engine.StabilityParams{

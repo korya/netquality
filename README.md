@@ -157,53 +157,42 @@ a request may *start*, and never slow down one that has already begun:
 | `--max-connections` | 256 | extra connections wait in the accept queue |
 | `--idle-timeout` | 2 min | closes a connection with no request in flight; HTTP/2 peers are pinged after 30 s of silence; transfers are never cut |
 
-The server checks byte credit and admission slots atomically before a transfer
-starts. On completion it charges the actual application payload bytes and
-releases the slot, including on cancellation or I/O failure; a panic
-conservatively charges the request cap. Config and small/probe requests do not consume slots.
-`--client-bytes -1` disables both byte budgeting and per-client admission slots.
-An explicit `--client-concurrency` then produces a warning, including with
-self-signed mode's default disabled budget; set a sufficiently large positive
-`--client-bytes` to keep the concurrency bound while making byte refusal
-practically unreachable.
+The server checks credit and a free slot atomically before a transfer starts,
+then charges the actual payload bytes and releases the slot when the handler
+returns, including after cancellation or an I/O error; a panic charges the
+request cap. Config and small probe requests never take a slot.
+`--client-bytes -1` disables byte budgeting and admission slots together, and
+an explicit `--client-concurrency` then warns that it is ignored, `--self-signed`
+included. To keep the concurrency bound without practical byte refusals, set
+`--client-bytes` high rather than negative.
 
-The byte budget is **not a strict quota**. With concurrency C and the larger
-request cap R, outstanding admitted payload and concurrent overshoot beyond
-available/refilled credit are bounded by C × R: **512 GiB with the defaults**
-(32 × 16 GiB). From a fresh default bucket, the conservative total-payload
-envelope is 8 GiB + 512 GiB + credit earned by refill. HTTP/TLS overhead,
-transport buffering and automatic body cleanup are outside this application
-payload accounting. Slots remain occupied until handlers return; cleanup does
-not forget active transfers or unpaid debt. `Retry-After` is a hint, not a
-reservation: a concurrency-only refusal suggests one second, while byte-debt
-recovery is rounded up to seconds and saturated for very large debts.
-
-Library server callers set `server.Options.MaxClientConcurrency`. Its default
-allows the client's 16 flows plus teardown headroom. Raise it for more flows or
-simultaneous clients sharing an IP; use signed subjects to give devices separate
-budgets. A smaller cap can refuse a measurement with `429` and `flow_error`.
+**It is not a strict quota.** With concurrency C and the larger request cap R,
+admitted payload can overshoot available credit by C × R: **512 GiB on the
+defaults** (32 × 16 GiB), on top of the 8 GiB bucket and whatever it refills.
+HTTP and TLS overhead, transport buffering and body cleanup fall outside the
+accounting entirely. `Retry-After` is a hint, not a reservation: one second
+for a concurrency refusal, byte debt rounded up to seconds and saturated when
+the debt is very large.
 
 **Stalled requests can deny a shared identity indefinitely.** Slots have no
-expiry: an upload that sends no body, a download whose receiver stops reading,
-or either direction that stalls after its first byte keeps its slot until the
-handler exits. Filling the slots blocks large downloads and uploads for
-everyone sharing that identity, even after many byte refill
-windows. Connection idle timeouts do not reclaim active requests, and HTTP/2
-pings cannot detect a stalled body from a peer that still answers pings.
-Config and small/probe endpoints remain exempt. Use separately issued signed
-subjects to isolate devices behind NAT or a load balancer; a shared bearer
-token alone still keys their budgets by IP.
+expiry, so an upload that sends no body, a download whose receiver stops
+reading, or either stalling mid-transfer holds its slot until the handler
+exits, blocking large transfers for everyone on that identity across any
+number of refill windows. Idle timeouts do not reclaim active requests, and
+HTTP/2 pings cannot distinguish a stalled body from a peer that still answers
+pings.
 
-Size `--client-concurrency` for each identity's simultaneous load flows and
-handler teardown overlap. Size `--max-connections` for all clients' load
-connections, fresh probes and teardown. The caps measure different resources:
-HTTP/2 can carry multiple requests on one connection. With defaults, one
-identity can exhaust its 32 transfer slots before the server reaches its
-256-connection limit; raising that global limit does not add per-client slots.
-
-Behind a load balancer the client key is the balancer's address; the server
-deliberately does not trust `X-Forwarded-For`. Use signed URLs with a subject
-(below) to key budgets per device instead.
+Size `--client-concurrency` for one identity's simultaneous load flows plus
+teardown overlap, and `--max-connections` for every client's load connections,
+fresh probes and teardown. HTTP/2 multiplexes, so the two count different
+things: one identity can exhaust its 32 slots long before the server reaches
+256 connections, and raising the global limit adds no per-client slots. The
+default leaves headroom for a client's 16 flows; raise it for more flows or
+more clients behind one address, and expect `429` with `flow_error` if it is
+too low. Library callers set `server.Options.MaxClientConcurrency`. Behind a
+load balancer every client keys to the balancer's address, because the server
+deliberately does not trust `X-Forwarded-For`. Only a signed `sub` separates
+devices there; a shared bearer token leaves them all on one IP-keyed budget.
 
 **Signed URLs: no secret on clients.** Your backend serves the config
 document with test URLs it has signed; `nqserver` verifies them and the
@@ -219,16 +208,15 @@ nqserver sign --key <key> --ttl 10m --sub laptop-7 https://nq.example.com/nq/sma
 Put the three signed URLs in a config document served by your backend and
 point the client at it (`Target{ConfigURL: "https://backend/nq-config"}`).
 The client needs no flags. The signature covers only the path, `exp` and `sub`:
-`sig = base64url(HMAC-SHA256(key, path + "\n" + exp + "\n" + sub))`. Any
-language can issue it, parameter order is irrelevant, and unsigned parameters
-are deliberately unprotected (never let a server trust them).
-Validity is `exp` + 30 s leeway, at most 24 h. Keep issuer and server clocks
-in sync: a server clock behind the issuer refuses everything as "issued too
-far ahead". Sign the *decoded* path (`/nq/large`, not `/nq/%6Carge`),
-percent-encode `sub` (a raw `+` decodes to a space and fails closed), and emit
-`sig` in any base64 flavour. `sub` keys the per-client
-budget, so ten laptops behind one NAT get ten budgets. Repeat
-`--signing-key` to rotate. Go backends can call `server.SignURL`.
+`sig = base64url(HMAC-SHA256(key, path + "\n" + exp + "\n" + sub))`, so any
+language can issue one, and unsigned parameters are deliberately unprotected
+(never let a server trust them). `sub` keys the per-client budget, so ten
+laptops behind one NAT get ten budgets. Repeat `--signing-key` to rotate; Go
+backends can call `server.SignURL`. Validity is `exp` plus 30 s of leeway and
+at most 24 h, so keep the two clocks in sync: a server running behind the
+issuer refuses everything as "issued too far ahead". The encoding rules that
+bite in practice, including which form of the path to sign and why `sub` must
+be percent-encoded, are in [SRV-10](docs/product-specs/server.md#srv-10-signed-urls).
 
 **mTLS** works today without a flag: wrap `server.Handler` in your own
 `http.Server` with `TLSConfig.ClientAuth = tls.RequireAndVerifyClientCert`
@@ -275,13 +263,13 @@ compromise) and transparent TCP-level proxies that pass TLS through untouched
 The combined phase budget is `ConfigTimeout + IdleTimeout + N × MaxDuration`,
 where N is the selected direction count; omit `IdleTimeout` when idle is
 skipped. Defaults total 44 s for both directions, 32 s for one, or 34 s for
-both with idle skipped. An earlier caller deadline stops the run and retains
-completed idle samples and other partial results. Zero or negative duration
-options select defaults, so they cannot disable the bounds.
-`IdleTimeout` does not grow with `IdleProbes`. Larger sample sets and healthy
-slow paths may need a larger timeout to complete all probes and obtain the
-requested percentiles. An idle-timeout warning means the measurement budget
-ran out; it does not by itself diagnose a faulty connection.
+both with idle skipped. Zero or negative duration options select defaults, so
+they cannot disable the bounds, and an earlier caller deadline stops the run
+while keeping what was already measured. `IdleTimeout` is a flat cap that does
+not grow with `IdleProbes`, so a large sample set or a healthy slow path may
+need a larger one to reach the requested percentiles; the warning it produces
+means the budget ran out, not that the connection is faulty. The server flag
+of the same name is unrelated: it bounds quiet connections between requests.
 
 Return time also includes local orchestration and prompt teardown. Supplied
 transports, dialers, body closers, event sinks, and log handlers must honor
@@ -290,22 +278,16 @@ forcibly stop caller code. Runner goroutines join and owned sockets close
 before return. A custom TLS dialer still executing at teardown has its
 connection closed when it hands it over. There are no retries or telemetry.
 
-The client's `--idle-timeout` measures the whole idle probing phase; the
-server's flag of the same name limits quiet connections between requests.
+`MaxBytes` is not an exact wire-byte limit. Probe cost is estimated (see
+Deviations) and charged even for failed loaded attempts, idle and discovery
+sit outside the per-direction totals, and headers, TLS, read-ahead, in-flight
+work and cancellation can all exceed the accounted budget.
 
-Probe cost is estimated, including failed loaded attempts: 5000 bytes for a
-foreign probe and 1000 for a self probe. Idle and discovery are outside the
-per-direction byte totals. Body-read limits do not prevent transport/socket
-read-ahead, and headers, TLS, in-flight work, and cancellation can exceed the
-accounted budget. `MaxBytes` is not an exact wire-byte limit. Invalid-size
-warnings are limited to one per phase/probe kind; load continues with only
-valid latency samples.
-
-The ten-byte response ceiling is fixed; there is no caller override. A server
-that changes its small response above ten bytes becomes incompatible with
-latency probing. Load continues to collect capacity measurements within the
-configured budgets, even if every probe fails; loaded latency is then absent
-and RPM is zero. Set `MaxBytes` and `MaxDuration` to bound that cost.
+A server whose small response leaves the 1-10 byte range stops being usable
+for latency probing. Load still collects capacity within the configured
+budgets even when every probe fails, with loaded latency absent and RPM zero,
+so `MaxBytes` and `MaxDuration` are what bound that cost. Invalid-size
+warnings are capped at one per phase and probe kind.
 [Dated compatibility checks](testdata/config/README.md) record the observed
 Apple and Cloudflare response sizes and how to repeat the small GETs.
 

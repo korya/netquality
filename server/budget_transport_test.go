@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -14,14 +15,25 @@ import (
 	"time"
 )
 
+// budgetSignalBody reports admission on the first read and, once, the error
+// that ended the handler's body read. The latter is how cancellation is
+// asserted: the server's view is deterministic where the client's is not.
 type budgetSignalBody struct {
 	io.ReadCloser
-	gate *transferGate
+	gate  *transferGate
+	ended chan<- error
 }
 
 func (b budgetSignalBody) Read(p []byte) (int, error) {
 	b.gate.once.Do(func() { b.gate.entered <- struct{}{} })
-	return b.ReadCloser.Read(p)
+	n, err := b.ReadCloser.Read(p)
+	if err != nil {
+		select {
+		case b.ended <- err:
+		default:
+		}
+	}
+	return n, err
 }
 
 func TestBudgetCancellationOverHTTP(t *testing.T) {
@@ -29,6 +41,7 @@ func TestBudgetCancellationOverHTTP(t *testing.T) {
 		for _, upload := range []bool{false, true} {
 			t.Run(fmt.Sprintf("h2=%v/upload=%v", h2, upload), func(t *testing.T) {
 				gates := map[string]*transferGate{"a": newTransferGate(), "b": newTransferGate(), "c": newTransferGate()}
+				readEnds := map[string]chan error{"a": make(chan error, 1), "b": make(chan error, 1), "c": make(chan error, 1)}
 				exits := make(chan string, 8)
 				h := Handler(Options{MaxClientBytes: 1 << 20, MaxClientConcurrency: 2, LargeSize: 64, UploadSize: 64})
 				srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -36,7 +49,7 @@ func TestBudgetCancellationOverHTTP(t *testing.T) {
 					if g := gates[id]; g != nil {
 						defer func() { exits <- id }()
 						if upload {
-							r.Body = budgetSignalBody{r.Body, g}
+							r.Body = budgetSignalBody{r.Body, g, readEnds[id]}
 						} else {
 							w = &gatedBudgetWriter{ResponseWriter: w, gate: g, ctx: r.Context()}
 						}
@@ -130,11 +143,22 @@ func TestBudgetCancellationOverHTTP(t *testing.T) {
 				get(SmallPath, 200)
 				get(ConfigPath, 200)
 				a.cancel()
-				if err := awaitBudget(t, a.done); err == nil {
-					t.Fatal("canceled request succeeded")
-				}
+				// Only wait for the client side to settle; do not assert how it
+				// settled. Over HTTP/1.1 the client's TLS close sends close_notify
+				// before the socket closes, the server reads that as body EOF and
+				// may answer 200 in the gap, and net/http prefers a response that
+				// races cancellation. Cancellation is asserted on the server instead:
+				// the aborted upload's body read must end with an error, never EOF,
+				// because the producer is closed with an error and the transport
+				// then never writes the terminating chunk.
+				_ = awaitBudget(t, a.done)
 				if id := awaitBudget(t, exits); id != "a" {
 					t.Fatalf("another admitted transfer exited: %s", id)
+				}
+				if upload {
+					if err := awaitBudget(t, readEnds["a"]); errors.Is(err, io.EOF) {
+						t.Fatalf("aborted upload ended with %v, want a read error", err)
+					}
 				}
 				c := start("c")
 				defer c.cancel()

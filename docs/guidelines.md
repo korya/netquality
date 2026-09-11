@@ -22,6 +22,11 @@ Process rules for changing this repository. Product behaviour lives in
   `go test -race -count=3 ./<touched packages>`; CI runs the race suite with
   `-count=2`. New concurrent code ships with a test that exercises it under
   the race detector.
+- **Cancellation is asserted server-side.** Never assert that a canceled
+  HTTP/1.1 request fails from the client's view: the TLS close sends
+  close_notify before the socket closes, the server may answer in that gap, and
+  `net/http` returns a response that races cancellation. Assert the effect the
+  cancellation must have (slot released, handler exited, next request admitted).
 - **Deterministic offline.** Tests run against the in-process server; only
   `TestLive` (`NQ_LIVE=1`, nightly) touches the Internet.
 

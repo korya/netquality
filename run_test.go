@@ -22,6 +22,7 @@ import (
 // its target and a client that trusts it.
 func newTestServer(t *testing.T, o server.Options) (Target, *http.Client) {
 	t.Helper()
+	skipIfShort(t)
 	if o.MaxClientBytes == 0 {
 		o.MaxClientBytes = -1 // loopback moves gigabytes per run
 	}
@@ -240,6 +241,7 @@ func TestMaxFlowsWithFakeClock(t *testing.T) {
 }
 
 func TestDiscoveryErrors(t *testing.T) {
+	skipIfShort(t)
 	bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/redirect":

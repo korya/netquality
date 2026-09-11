@@ -148,6 +148,7 @@ func TestParseSigningKey(t *testing.T) {
 }
 
 func TestHandlerSignedURLs(t *testing.T) {
+	skipIfShort(t)
 	srv := httptest.NewTLSServer(Handler(Options{SigningKeys: [][]byte{testKey}, AuthToken: "tok", LargeSize: 64, MaxClientBytes: 100, ClientWindow: time.Hour}))
 	defer srv.Close()
 	client := srv.Client()
@@ -211,6 +212,7 @@ func TestHandlerSignedURLs(t *testing.T) {
 }
 
 func TestHandlerSignedOnlyServer(t *testing.T) {
+	skipIfShort(t)
 	// Signing keys without a token: test endpoints need a signature, the
 	// config document is not reachable at all (serve it from the backend).
 	srv := httptest.NewTLSServer(Handler(Options{SigningKeys: [][]byte{testKey}}))
@@ -248,6 +250,7 @@ func readAll(resp *http.Response) ([]byte, error) {
 }
 
 func TestHandlerAnonymousServerAcceptsSignedURLs(t *testing.T) {
+	skipIfShort(t)
 	srv := httptest.NewTLSServer(Handler(Options{MaxClientBytes: -1}))
 	defer srv.Close()
 	s, _ := SignURL(testKey, srv.URL+SmallPath, time.Now().Add(time.Minute), "d")

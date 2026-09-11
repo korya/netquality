@@ -51,6 +51,7 @@ func (c *countedConn) Close() error {
 // optionally recording every request through rec.
 func startCountingServer(t *testing.T, rec func(*http.Request)) (*httptest.Server, *countingListener) {
 	t.Helper()
+	skipIfShort(t)
 	h := server.Handler(server.Options{MaxClientBytes: -1})
 	if rec != nil {
 		inner := h

@@ -51,6 +51,7 @@ func (b *trackedProbeBody) Close() error {
 }
 
 func TestProbeResponseSize(t *testing.T) {
+	skipIfShort(t)
 	for _, h2 := range []bool{false, true} {
 		for _, tc := range []struct {
 			name     string
@@ -140,6 +141,7 @@ func TestProbeResponseSize(t *testing.T) {
 }
 
 func TestProbeRejectionPreservesLoad(t *testing.T) {
+	skipIfShort(t)
 	for _, mode := range []string{"declared", "streamed", "deadline"} {
 		t.Run(mode, func(t *testing.T) {
 			more := make(chan struct{})

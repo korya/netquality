@@ -1,3 +1,5 @@
+//go:build e2e
+
 package main
 
 import (
@@ -16,15 +18,12 @@ import (
 
 func startServer(t *testing.T) string {
 	t.Helper()
+	skipIfShort(t)
 	srv := httptest.NewUnstartedServer(server.Handler(server.Options{MaxClientBytes: -1}))
 	srv.EnableHTTP2 = true
 	srv.StartTLS()
 	t.Cleanup(srv.Close)
 	return srv.URL + server.ConfigPath
-}
-
-func base(url string, extra ...string) []string {
-	return append([]string{"--config-url", url, "--insecure", "--max-duration", "300ms", "--interval", "100ms", "--idle-probes", "2"}, extra...)
 }
 
 func TestJSONOutput(t *testing.T) {
@@ -151,6 +150,7 @@ func TestHelpers(t *testing.T) {
 }
 
 func TestAuthTokenFlagAndEnv(t *testing.T) {
+	skipIfShort(t)
 	srv := httptest.NewUnstartedServer(server.Handler(server.Options{AuthToken: "s3cret", MaxClientBytes: -1}))
 	srv.EnableHTTP2 = true
 	srv.StartTLS()
@@ -223,13 +223,4 @@ func TestEdgeFlags(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &res); err != nil || res.Idle == nil || res.Idle.Samples != netquality.DefaultIdleProbes || res.Download.Flows == 0 {
 		t.Errorf("zero flags must mean defaults: %v idle=%+v flows=%d", err, res.Idle, res.Download.Flows)
 	}
-}
-
-func lineWith(s, prefix string) string {
-	for _, l := range strings.Split(s, "\n") {
-		if strings.HasPrefix(l, prefix) {
-			return l
-		}
-	}
-	return ""
 }

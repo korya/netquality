@@ -319,8 +319,12 @@ normalised to 1 RTT for TLS 1.3 and 2 for TLS 1.2.
 ## Testing
 
 ```
-go test ./...            # unit + end-to-end against an in-process nqserver
+just test                # unit + integration (in-process nqserver)
+just test -short         # unit only: nothing starts a listener or a process
+just test-e2e            # end-to-end tests (files tagged `//go:build e2e`)
+go test -tags e2e ./...  # everything, as CI runs it
 NQ_LIVE=1 go test -run TestLive -v .   # hits Apple and Cloudflare
+just measure-cloudflare  # a real measurement with the nq CLI (also measure-apple)
 ```
 
 [`docs/test-matrix.md`](docs/test-matrix.md) maps every feature and use case

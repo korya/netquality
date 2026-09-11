@@ -1,3 +1,5 @@
+//go:build e2e
+
 package netquality
 
 import (
@@ -14,31 +16,6 @@ import (
 
 	"github.com/korya/netquality/server"
 )
-
-// startServer starts an in-process nqserver with the given handler wrapper
-// and TLS tweaks, returning the base URL.
-func startServer(t *testing.T, o server.Options, wrap func(http.Handler) http.Handler, tlsCfg *tls.Config, h2 bool) *httptest.Server {
-	t.Helper()
-	if o.MaxClientBytes == 0 {
-		o.MaxClientBytes = -1 // loopback moves gigabytes per run
-	}
-	h := server.Handler(o)
-	if wrap != nil {
-		h = wrap(h)
-	}
-	srv := httptest.NewUnstartedServer(h)
-	srv.EnableHTTP2 = h2
-	srv.TLS = tlsCfg
-	srv.StartTLS()
-	t.Cleanup(srv.Close)
-	return srv
-}
-
-func insecureClient() *http.Client {
-	tr := http.DefaultTransport.(*http.Transport).Clone()
-	tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // test server
-	return &http.Client{Transport: tr}
-}
 
 func TestHTTP11Fallback(t *testing.T) {
 	srv := startServer(t, server.Options{}, nil, nil, false)
@@ -121,6 +98,7 @@ func TestFlowErrorAfterIntervalsKeepsResult(t *testing.T) {
 }
 
 func TestTestEndpointHonoured(t *testing.T) {
+	skipIfShort(t)
 	// Config URLs name an unresolvable host; test_endpoint points at loopback.
 	srv := httptest.NewUnstartedServer(nil)
 	srv.EnableHTTP2 = true
@@ -373,15 +351,6 @@ func TestMaxFlowsDefaultAndOptionsDefaults(t *testing.T) {
 			t.Errorf("json %s", b)
 		}
 	}
-}
-
-func hasWarning(res *Result, substr string) bool {
-	for _, w := range res.Warnings {
-		if strings.Contains(w, substr) {
-			return true
-		}
-	}
-	return false
 }
 
 // TestTestEndpointCustomTLSDialer (DISC-9): a custom TLS dialer cannot honour

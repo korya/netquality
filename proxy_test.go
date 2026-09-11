@@ -86,6 +86,7 @@ func TestInspectChain(t *testing.T) {
 // counter of tunnelled connections.
 func startConnectProxy(t *testing.T) (string, *atomic.Int32) {
 	t.Helper()
+	skipIfShort(t)
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -125,6 +126,7 @@ func quickOpts(client *http.Client) Options {
 }
 
 func TestExplicitProxyDetected(t *testing.T) {
+	skipIfShort(t)
 	srv := httptest.NewUnstartedServer(server.Handler(server.Options{TestEndpoint: "nq.example.test"}))
 	srv.EnableHTTP2 = true
 	srv.StartTLS()
@@ -165,6 +167,7 @@ func TestExplicitProxyDetected(t *testing.T) {
 }
 
 func TestTLSInterceptionDetected(t *testing.T) {
+	skipIfShort(t)
 	srv := httptest.NewUnstartedServer(server.Handler(server.Options{}))
 	srv.EnableHTTP2 = true
 	srv.StartTLS()

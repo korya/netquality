@@ -25,7 +25,7 @@ phones home.
 | Language | Go ≥ 1.26 (`go.mod` minimum); CI/release pinned via workflows, `GOTOOLCHAIN=local` |
 | Dependencies | Standard library only, no CGO |
 | Module | `github.com/korya/netquality` |
-| Build/test | `go build ./...`, `go test -race ./...`, `go vet ./...`, `golangci-lint run ./...` |
+| Build/test | `go build ./...`, `go test -race -tags e2e ./...`, `go vet -tags e2e ./...`, `golangci-lint run --build-tags e2e ./...`; `just test` (unit + integration), `just test -short` (unit only), `just test-e2e` |
 | Lint config | `.golangci.yml` (standard set; `fmt.Fprint*` and `Body.Close` excluded from errcheck) |
 | CI | GitHub Actions: lint + govulncheck, tests on Linux/macOS/Windows, minimum-Go job, 6-target cross-compile, public-API compatibility gate; nightly `Live`; tag-triggered `Release` |
 | Licence | Apache-2.0; no GPL-derived code |

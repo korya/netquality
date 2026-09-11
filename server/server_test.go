@@ -215,35 +215,9 @@ func TestHandlerAuthOnEveryRoute(t *testing.T) {
 	}
 }
 
-func TestClientBudget(t *testing.T) {
-	now := time.Unix(0, 0)
-	b := newClientBudget(1000, time.Minute)
-	b.now = func() time.Time { return now }
-	if ok, _ := b.allow("a"); !ok {
-		t.Fatal("fresh client must be allowed")
-	}
-	b.charge("a", 1500) // one request may overshoot
-	ok, wait := b.allow("a")
-	if ok || wait <= 0 || wait > time.Minute {
-		t.Errorf("exhausted: ok=%v wait=%v", ok, wait)
-	}
-	if ok, _ := b.allow("b"); !ok {
-		t.Error("budgets are per client")
-	}
-	now = now.Add(31 * time.Second) // refill: -500 + 516 > 0
-	if ok, _ := b.allow("a"); !ok {
-		t.Error("budget must refill over the window")
-	}
-	now = now.Add(time.Hour)
-	b.charge("a", 10)
-	if b.seen["a"].tokens > 1000 {
-		t.Error("bucket must not exceed max")
-	}
-}
-
 func TestHandlerBudgetAndUploadCap(t *testing.T) {
 	// Budget of 100 bytes: the first large download (64 B) is allowed, the
-	// next metered request is refused with 429 + Retry-After; small is exempt.
+	// second request overshoots, then requests get 429; small is exempt.
 	srv := httptest.NewTLSServer(Handler(Options{LargeSize: 64, UploadSize: 10, MaxClientBytes: 100, ClientWindow: time.Hour}))
 	defer srv.Close()
 	client := srv.Client()

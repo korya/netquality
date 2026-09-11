@@ -149,11 +149,56 @@ whether a request may *start*, never slow one down:
 
 | Flag | Default | Effect |
 |---|---|---|
-| `--client-bytes` / `--client-window` | 8 GiB / 10 min (unlimited with `--self-signed`) | per client IP; a refused request gets `429` + `Retry-After` |
+| `--client-bytes` / `--client-window` | 8 GiB / 10 min (unlimited with `--self-signed`) | token-bucket credit per client IP or signed subject; refusal gets `429` + `Retry-After` |
+| `--client-concurrency` | 32 | active large/download and upload requests per budget identity; nonpositive selects 32; disabled when the byte budget is disabled |
 | `--upload-size` | 16 GiB | bytes accepted by one upload |
 | `--large-size` | 8 GiB | bytes served by one download |
 | `--max-connections` | 256 | extra connections wait in the accept queue |
 | `--idle-timeout` | 2 min | closes a connection with no request in flight; HTTP/2 peers are pinged after 30 s of silence; transfers are never cut |
+
+Byte credit and admission slots are checked atomically before a transfer
+starts. Completion charges actual application payload bytes and releases the
+slot, including on cancellation or I/O failure; a panic conservatively charges
+the request cap. Config and small/probe requests do not consume slots.
+`--client-bytes -1` disables both byte budgeting and per-client admission slots.
+An explicit `--client-concurrency` then produces a warning, including with
+self-signed mode's default disabled budget; set a sufficiently large positive
+`--client-bytes` to keep the concurrency bound while making byte refusal
+practically unreachable.
+
+The byte budget is **not a strict quota**. With concurrency C and the larger
+request cap R, outstanding admitted payload and concurrent overshoot beyond
+available/refilled credit are bounded by C × R: **512 GiB with the defaults**
+(32 × 16 GiB). From a fresh default bucket, the conservative total-payload
+envelope is 8 GiB + 512 GiB + credit earned by refill. HTTP/TLS overhead,
+transport buffering and automatic body cleanup are outside this application
+payload accounting. Slots remain occupied until handlers return; cleanup does
+not forget active transfers or unpaid debt. `Retry-After` is a hint, not a
+reservation: a concurrency-only refusal suggests one second, while byte-debt
+recovery is rounded up to seconds and saturated for very large debts.
+
+Library server callers set `server.Options.MaxClientConcurrency`. Its default
+allows the client's 16 flows plus teardown headroom. Raise it for more flows or
+simultaneous clients sharing an IP; use signed subjects to give devices separate
+budgets. A smaller cap can refuse a measurement with `429` and `flow_error`.
+
+**Stalled requests can deny a shared identity indefinitely.** Slots have no
+expiry: an upload that sends no body, a download whose receiver stops reading,
+or either direction that stalls after its first byte keeps its slot until the
+handler exits. Filling the slots blocks large downloads and uploads for
+everyone sharing that identity, even after many byte refill
+windows. Connection idle timeouts do not reclaim active requests, and HTTP/2
+pings cannot detect a stalled body from a peer that still answers pings.
+Config and small/probe endpoints remain exempt. Use separately issued signed
+subjects to isolate devices behind NAT or a load balancer; a shared bearer
+token alone still keys their budgets by IP.
+
+Size `--client-concurrency` for each identity's simultaneous load flows and
+handler teardown overlap. Size `--max-connections` for all clients' load
+connections, fresh probes and teardown. The caps measure different resources:
+HTTP/2 can carry multiple requests on one connection. With defaults, one
+identity can exhaust its 32 transfer slots before the server reaches its
+256-connection limit; raising that global limit does not add per-client slots.
 
 Behind a load balancer the client key is the balancer's address; the server
 deliberately does not trust `X-Forwarded-For` — use signed URLs with a
@@ -272,6 +317,7 @@ Apple and Cloudflare response sizes and how to repeat the small GETs.
 | Byte cap default | (handoff spec: 250 MB) | none | A fixed byte cap starves fast links of the intervals a confident RPM needs (≈ 8 × rate); the caller knows which networks are metered, the library cannot. |
 | Flow error | abort the test | abort the **phase**, report `reason=flow_error`, keep other results | Partial data with a flag beats none. |
 | Self probes on HTTP/1.1 | use TCP RTT estimate | omitted; RPM from foreign probes only, warning recorded | TCP_INFO is not portable in pure Go. |
+| Server admission | successful load endpoints return 200 | per-client byte credit and concurrent-request slots may refuse new load requests with 429 | Bounds admitted work without throttling transfers already running; probes are exempt. |
 | Flow addition | one per interval | **doubling** each interval while a step gains ≥ 10 % goodput, up to `MaxFlows` | Reaches saturation in ≤ 5 intervals instead of 16, so a 10 Gbps or high-RTT link still settles inside the 12 s budget; a slow link stops after one exploratory flow. |
 | Responsiveness tracking | after goodput stability | from the end of the ramp; stability judged on the windowed values, not on averages of them | Removes 3–4 s of latency from every run; the phase still ends only with both series stable. |
 | Upload byte accounting | – | intervals inflated by the HTTP/2 send window of new flows are excluded | Bytes are counted when the transport takes them; on a 20 Mbps link the 4 MiB credit otherwise reports 53 Mbps with high confidence. |

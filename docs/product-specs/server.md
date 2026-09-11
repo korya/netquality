@@ -39,15 +39,56 @@ refuses anonymous mode with a real certificate unless `--allow-anonymous`
 (`--self-signed` implies it).
 
 ### SRV-8: Per-client byte budget
-Each client — the verified signed subject when a request carries one (see
-SRV-10), otherwise the source IP — has a budget of `--client-bytes` per `--client-window`
-(default 8 GiB per 10 min; unlimited by default under `--self-signed`, since
-development runs on loopback move gigabytes). A large download or upload may start only while
-the budget is positive and is charged the bytes it actually moved when it
-ends, so one request may overshoot by at most its own cap; a refused request
-gets `429` with `Retry-After` in seconds. Running requests are never slowed
-down — limits gate the start of work, never shape traffic. The config and
-small endpoints are exempt. `-1` disables the budget.
+Each client — the verified signed subject selected by authentication
+(SRV-10), otherwise the source IP — has a token bucket refilled at
+`--client-bytes` per `--client-window`, up to `--client-bytes` (default
+8 GiB per 10 min). A supported large download or upload may start only with
+a positive byte balance and an available admission slot (SRV-12). Its slot
+is reserved atomically before transfer work and released atomically with
+charging the actual application payload bytes when its handler returns,
+including cancellation and read/write errors. A panic releases the slot and
+conservatively charges that endpoint's request cap. Running transfers are
+never slowed or canceled by the budget. Config and small endpoints are exempt.
+A refused request gets 429 naming the byte or concurrency limit and a positive
+`Retry-After` hint; concurrency-only hints are advisory, and byte-recovery
+hints saturate at the representable maximum. Active buckets and buckets not
+yet fully replenished are not evicted. Negative `--client-bytes` disables
+both byte accounting and these admission slots; self-signed mode retains
+that default.
+
+### SRV-12: Concurrent admission bound
+`--client-concurrency` / `Options.MaxClientConcurrency` limits the sum of
+active large/download and upload requests per budget identity; default 32,
+with nonpositive values selecting the default. Positive custom values are
+finite. With an enabled budget, no identity has more than C admitted handlers
+active at once. If R is the larger configured request cap, outstanding admitted
+application payload is at most C × R; concurrent overshoot beyond available
+and refilled byte credit is also conservatively bounded by C × R. Defaults
+give 512 GiB for this allowance. This is a token-bucket admission budget, not
+a strict byte quota or sliding-window wire-byte meter. Deployments running
+more simultaneous flows or sharing an IP across clients must size the cap
+accordingly or use signed subjects. A handler retains its slot until it
+returns, even if its context has already been canceled.
+
+Slots have no expiry. A stalled request, before or after its first byte, can
+hold a slot indefinitely under SRV-11; filling the slots denies large and
+upload requests to every client sharing that identity, even across many byte
+refill windows. Config and small requests remain exempt. Separately issued
+signed subjects isolate devices behind NAT or a load balancer; a shared bearer
+token alone does not separate their IP-based budgets.
+
+Size this per-identity request cap for simultaneous load flows plus handler
+teardown overlap (32 allows headroom for a default client's 16 flows). Size
+SRV-9's global connection cap for all simultaneous clients' load connections,
+fresh probes and teardown. These are separate limits: HTTP/2 multiplexes
+requests, so a connection cap is not a request cap. With defaults, one identity
+can hit 32 active transfers before the server reaches 256 connections.
+
+If `--client-concurrency` is explicitly supplied while byte budgeting is
+disabled, `nqserver` warns that it is ignored. A sufficiently large positive
+`--client-bytes` enables the concurrency bound while making byte refusal
+practically unreachable. This includes self-signed mode's default disabled
+budget; omitting the concurrency flag produces no such warning.
 
 ### SRV-9: Request and connection caps
 One upload request accepts at most `--upload-size` bytes (default 16 GiB) and

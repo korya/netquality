@@ -27,7 +27,7 @@ phones home.
 | Module | `github.com/korya/netquality` |
 | Build/test | `go build ./...`, `go test -race ./...`, `go vet ./...`, `golangci-lint run ./...` |
 | Lint config | `.golangci.yml` (standard set; `fmt.Fprint*` and `Body.Close` excluded from errcheck) |
-| CI | GitHub Actions: lint + govulncheck, tests on Linux/macOS/Windows, minimum-Go job, 6-target cross-compile, advisory public-API diff; nightly `Live`; tag-triggered `Release` |
+| CI | GitHub Actions: lint + govulncheck, tests on Linux/macOS/Windows, minimum-Go job, 6-target cross-compile, public-API compatibility gate; nightly `Live`; tag-triggered `Release` |
 | Licence | Apache-2.0; no GPL-derived code |
 
 ## Architecture in 30 seconds

@@ -107,9 +107,9 @@ before blaming the code.
   patch for fixes and docs.
 - `scripts/api-compat.sh` reports incompatible public API changes since the
   newest tag; run it before a release. Its CI job is advisory while the API
-  may still break. Tagging v1.0.0 means dropping `continue-on-error` from the
-  `api-compat` job, after which an incompatible change needs a `/v2` module
-  path rather than a merge.
+  may still break: a break is a warning and a job summary, not a red check.
+  Tagging v1.0.0 means reducing that step to the script alone, after which an
+  incompatible change needs a `/v2` module path rather than a merge.
 
 ## Documentation
 

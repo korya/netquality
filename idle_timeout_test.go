@@ -48,25 +48,26 @@ func TestIdleTimeout(t *testing.T) {
 					defer cancel()
 					watchdog := time.AfterFunc(5*time.Second, cancel)
 					defer watchdog.Stop()
-					res, err := RunWithEvents(ctx, Target{ConfigURL: srv.URL + server.ConfigPath}, Options{
+					res, err := Run(ctx, Target{ConfigURL: srv.URL + server.ConfigPath}, Options{
 						HTTPClient: client, IdleProbes: 1000, IdleTimeout: 500 * time.Millisecond,
 						Directions: Download, MaxDuration: 100 * time.Millisecond, MaxBytes: 1 << 20,
-					}, func(e Event) {
-						if e.Kind == EventPhase && e.Phase == "download" {
-							// A custom TLS dial can still be handing its socket
-							// over after cancellation; match TestNoLeaksAcrossRuns.
-							closed := sockets.open.Load() == 0
-							if h2 {
-								closed = eventually(time.Second, func() bool { return sockets.open.Load() == 0 })
+						Events: func(e Event) {
+							if e.Kind == EventPhase && e.Phase == "download" {
+								// A custom TLS dial can still be handing its socket
+								// over after cancellation; match TestNoLeaksAcrossRuns.
+								closed := sockets.open.Load() == 0
+								if h2 {
+									closed = eventually(time.Second, func() bool { return sockets.open.Load() == 0 })
+								}
+								if !closed {
+									t.Errorf("idle left %d owned sockets open before load", sockets.open.Load())
+								}
+								loading.Store(true)
 							}
-							if !closed {
-								t.Errorf("idle left %d owned sockets open before load", sockets.open.Load())
+							if e.Kind == EventWarning && strings.Contains(e.Message, "idle timeout") {
+								warningEvents.Add(1)
 							}
-							loading.Store(true)
-						}
-						if e.Kind == EventWarning && strings.Contains(e.Message, "idle timeout") {
-							warningEvents.Add(1)
-						}
+						},
 					})
 					if err != nil || res == nil {
 						t.Fatalf("idle timeout must be nonfatal: result=%+v err=%v", res, err)
@@ -155,13 +156,14 @@ func TestPhaseTimeoutBudgets(t *testing.T) {
 			watchdog := time.AfterFunc(5*time.Second, cancel)
 			defer watchdog.Stop()
 			started := time.Now()
-			res, err := RunWithEvents(ctx, Target{ConfigURL: srv.URL + server.ConfigPath}, Options{
+			res, err := Run(ctx, Target{ConfigURL: srv.URL + server.ConfigPath}, Options{
 				HTTPClient: insecureClient(), ConfigTimeout: time.Second, IdleTimeout: 200 * time.Millisecond,
 				IdleProbes: tc.idle, Directions: tc.dir, MaxDuration: 100 * time.Millisecond, clock: clock,
-			}, func(e Event) {
-				if e.Kind == EventPhase && (e.Phase == "download" || e.Phase == "upload") {
-					loading.Store(true)
-				}
+				Events: func(e Event) {
+					if e.Kind == EventPhase && (e.Phase == "download" || e.Phase == "upload") {
+						loading.Store(true)
+					}
+				},
 			})
 			elapsed := time.Since(started)
 			if err != nil || res == nil || res.Cancelled {
@@ -263,21 +265,22 @@ func TestIdleTimeoutDiagnostics(t *testing.T) {
 			defer cancel()
 			watchdog := time.AfterFunc(5*time.Second, cancel)
 			defer watchdog.Stop()
-			res, err := RunWithEvents(ctx, Target{ConfigURL: srv.URL + server.ConfigPath}, Options{
+			res, err := Run(ctx, Target{ConfigURL: srv.URL + server.ConfigPath}, Options{
 				HTTPClient: insecureClient(), IdleProbes: probes, IdleTimeout: 500 * time.Millisecond,
 				Directions: Download, MaxDuration: 100 * time.Millisecond, MaxBytes: 1 << 20, clock: clock,
-			}, func(e Event) {
-				if completed && e.Kind == EventProbe && e.Phase == "idle" {
-					// Force the deadline to land after the final successful sample,
-					// before idle examines its context. Production sinks return promptly.
-					clock.mu.Lock()
-					idleContext := clock.contexts[1] // discovery then idle
-					clock.mu.Unlock()
-					<-idleContext.Done()
-				}
-				if e.Kind == EventPhase && e.Phase == "download" {
-					loading.Store(true)
-				}
+				Events: func(e Event) {
+					if completed && e.Kind == EventProbe && e.Phase == "idle" {
+						// Force the deadline to land after the final successful sample,
+						// before idle examines its context. Production sinks return promptly.
+						clock.mu.Lock()
+						idleContext := clock.contexts[1] // discovery then idle
+						clock.mu.Unlock()
+						<-idleContext.Done()
+					}
+					if e.Kind == EventPhase && e.Phase == "download" {
+						loading.Store(true)
+					}
+				},
 			})
 			if err != nil || res == nil || res.Cancelled || res.Download == nil {
 				t.Fatalf("idle outcome must allow load: result=%+v err=%v", res, err)
@@ -307,12 +310,13 @@ func TestCancelAtLoadPhaseEvent(t *testing.T) {
 			}, nil, true)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			res, err := RunWithEvents(ctx, Target{ConfigURL: srv.URL + server.ConfigPath}, Options{
+			res, err := Run(ctx, Target{ConfigURL: srv.URL + server.ConfigPath}, Options{
 				HTTPClient: insecureClient(), IdleProbes: -1, Directions: dir,
-			}, func(e Event) {
-				if e.Kind == EventPhase && e.Phase == dir.String() {
-					cancel() // runs between the outer guard and loadPhase's guard
-				}
+				Events: func(e Event) {
+					if e.Kind == EventPhase && e.Phase == dir.String() {
+						cancel() // runs between the outer guard and loadPhase's guard
+					}
+				},
 			})
 			if err != context.Canceled || res == nil || !res.Cancelled {
 				t.Fatalf("phase event cancellation: result=%+v err=%v", res, err)

@@ -17,7 +17,7 @@ func TestPercentilesEndToEnd(t *testing.T) {
 	// intervals × MAD 4) attempts ~400 samples of each kind; slow CI runners
 	// complete a fraction of that (TLS handshakes, 64 in flight), which still
 	// clears the 100 needed for p99 with margin.
-	p := DefaultStabilityParams()
+	p := defaultStability()
 	p.Interval = time.Second
 	p.MaxProbesPerSecond = 200
 	p.StdDevTolerance = 1e-9 // never stop early: keep probing for the whole budget

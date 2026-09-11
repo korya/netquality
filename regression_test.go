@@ -225,13 +225,14 @@ func TestWireContract(t *testing.T) {
 		mu.Unlock()
 	})
 	var probes atomic.Int64
-	res, err := RunWithEvents(context.Background(), Target{ConfigURL: srv.URL + server.ConfigPath}, Options{
+	res, err := Run(context.Background(), Target{ConfigURL: srv.URL + server.ConfigPath}, Options{
 		HTTPClient: insecureClient(), IdleProbes: 3, MaxFlows: 3,
 		MaxDuration: 400 * time.Millisecond, MaxBytes: 1 << 40, Stability: fastStability(),
-	}, func(e Event) {
-		if e.Kind == EventProbe && (e.ProbeKind == "idle" || e.ProbeKind == "foreign") {
-			probes.Add(1)
-		}
+		Events: func(e Event) {
+			if e.Kind == EventProbe && (e.ProbeKind == "idle" || e.ProbeKind == "foreign") {
+				probes.Add(1)
+			}
+		},
 	})
 	if err != nil {
 		t.Fatal(err)

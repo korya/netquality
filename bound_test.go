@@ -24,13 +24,14 @@ func TestLowerBoundInResult(t *testing.T) {
 	p.StdDevTolerance = 10
 	p.ChangeTolerance = 1
 	var holds int
-	res, err := RunWithEvents(context.Background(), target, Options{
+	res, err := Run(context.Background(), target, Options{
 		HTTPClient: client, Directions: Both, IdleProbes: -1, MaxFlows: 4,
 		MaxDuration: 3 * time.Second, Stability: p,
-	}, func(e Event) {
-		if e.Kind == EventInterval && e.Hold {
-			holds++
-		}
+		Events: func(e Event) {
+			if e.Kind == EventInterval && e.Hold {
+				holds++
+			}
+		},
 	})
 	if err != nil {
 		t.Fatal(err)

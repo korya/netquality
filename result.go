@@ -3,28 +3,73 @@ package netquality
 import (
 	"context"
 	"time"
-
-	"github.com/korya/netquality/internal/engine"
 )
 
-// Latency types and the Confidence score live in the engine package; these
-// aliases keep them part of the public API.
-type (
-	// LatencyStats summarises a set of latency samples (see engine.LatencyStats).
-	LatencyStats = engine.LatencyStats
-	// StageMedians holds per-stage medians from net/http/httptrace.
-	StageMedians = engine.StageMedians
-	// LatencySample is one probe measurement.
-	LatencySample = engine.LatencySample
-	// Confidence is the draft's Section 5.4.1 confidence score.
-	Confidence = engine.Confidence
-)
+// LatencyStats summarises a set of latency samples.
+//
+// Percentiles use the nearest-rank method, which returns the maximum for any
+// percentile above 100·(n-1)/n. A percentile field is therefore present only
+// when the sample count makes it a real order statistic distinct from the
+// maximum: P80 from 5 samples, P90 from 10, P95 from 20, P99 from 100. A
+// field never holds a lower percentile than its name says; absent means "not
+// enough samples", never zero.
+//
+// Jitter is the mean absolute deviation of the samples from their mean.
+// Stages holds per-stage medians (dns, connect, tls, ttfb) when the samples
+// carry stage timings (foreign probes and idle probes do; self probes do not).
+type LatencyStats struct {
+	Samples int           `json:"samples"`
+	Min     time.Duration `json:"min_ns"`
+	Median  time.Duration `json:"median_ns"`
+	Mean    time.Duration `json:"mean_ns"`
+	P80     time.Duration `json:"p80_ns,omitempty"`
+	P90     time.Duration `json:"p90_ns,omitempty"`
+	P95     time.Duration `json:"p95_ns,omitempty"`
+	P99     time.Duration `json:"p99_ns,omitempty"`
+	Max     time.Duration `json:"max_ns"`
+	Jitter  time.Duration `json:"jitter_ns"`
+	Stages  *StageMedians `json:"stages,omitempty"`
+}
 
-// Confidence levels.
+// HighestPercentile returns the largest percentile present and its value,
+// or (0, 0) when the set is too small for any.
+func (s LatencyStats) HighestPercentile() (float64, time.Duration) {
+	switch {
+	case s.P99 > 0:
+		return 99, s.P99
+	case s.P95 > 0:
+		return 95, s.P95
+	case s.P90 > 0:
+		return 90, s.P90
+	case s.P80 > 0:
+		return 80, s.P80
+	}
+	return 0, 0
+}
+
+// StageMedians holds median per-stage timings from net/http/httptrace.
+// TLS is the raw handshake time; TLSPerRTT is the same value normalised to a
+// single round trip (TLS 1.3 = 1 RTT, TLS 1.2 = 2 RTTs) as the draft requires.
+type StageMedians struct {
+	DNS       time.Duration `json:"dns_ns"`
+	Connect   time.Duration `json:"connect_ns"`
+	TLS       time.Duration `json:"tls_ns"`
+	TLSPerRTT time.Duration `json:"tls_per_rtt_ns"`
+	TTFB      time.Duration `json:"ttfb_ns"`
+}
+
+// Confidence is the draft's Section 5.4.1 confidence score.
+type Confidence string
+
 const (
-	ConfidenceLow    = engine.ConfidenceLow
-	ConfidenceMedium = engine.ConfidenceMedium
-	ConfidenceHigh   = engine.ConfidenceHigh
+	// ConfidenceLow: fewer than MovingAverageDistance intervals ran; the
+	// moving average is partial.
+	ConfidenceLow Confidence = "low"
+	// ConfidenceMedium: at least MovingAverageDistance intervals ran but
+	// stability was not reached.
+	ConfidenceMedium Confidence = "medium"
+	// ConfidenceHigh: stability was reached.
+	ConfidenceHigh Confidence = "high"
 )
 
 // ResultSchemaVersion identifies the JSON shape of Result. It is bumped when a

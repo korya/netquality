@@ -43,13 +43,14 @@ func TestLoadedWindowAndSparseSeriesWarning(t *testing.T) {
 	p.StdDevTolerance = 1e-12
 	p.MaxProbesPerSecond = 1
 	var foreignSeen bool
-	res, err = RunWithEvents(context.Background(), target, Options{
+	res, err = Run(context.Background(), target, Options{
 		HTTPClient: client, Directions: Download, IdleProbes: -1, MaxFlows: 1,
 		MaxDuration: 2 * time.Second, Stability: p,
-	}, func(e Event) {
-		if e.Kind == EventProbe && e.ProbeKind == "foreign" {
-			foreignSeen = true
-		}
+		Events: func(e Event) {
+			if e.Kind == EventProbe && e.ProbeKind == "foreign" {
+				foreignSeen = true
+			}
+		},
 	})
 	if err != nil {
 		t.Fatal(err)

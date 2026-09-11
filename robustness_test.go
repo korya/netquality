@@ -77,11 +77,12 @@ func TestStalledLargeBody(t *testing.T) {
 	o := robustOpts(Download)
 	start := time.Now()
 	var foreignProbes atomic.Int64
-	res, err := RunWithEvents(context.Background(), Target{ConfigURL: srv.URL + server.ConfigPath}, o, func(e Event) {
+	o.Events = func(e Event) {
 		if e.Kind == EventProbe && e.ProbeKind == "foreign" {
 			foreignProbes.Add(1)
 		}
-	})
+	}
+	res, err := Run(context.Background(), Target{ConfigURL: srv.URL + server.ConfigPath}, o)
 	if err != nil {
 		t.Fatal(err)
 	}

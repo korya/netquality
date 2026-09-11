@@ -22,7 +22,7 @@ func TestParseServerConfigFixtures(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			cfg, err := ParseServerConfig(data)
+			cfg, err := parseServerConfig(data)
 			if err != nil {
 				t.Fatalf("parse: %v", err)
 			}
@@ -50,7 +50,7 @@ func TestParseServerConfigInvalid(t *testing.T) {
 	}
 	for name, doc := range tests {
 		t.Run(name, func(t *testing.T) {
-			_, err := ParseServerConfig([]byte(doc))
+			_, err := parseServerConfig([]byte(doc))
 			if !errors.Is(err, ErrInvalidConfig) {
 				t.Errorf("want ErrInvalidConfig, got %v", err)
 			}
@@ -60,7 +60,7 @@ func TestParseServerConfigInvalid(t *testing.T) {
 
 func TestParseServerConfigIgnoresUnknown(t *testing.T) {
 	doc := `{"version":1,"future":true,"urls":{"small_download_url":"https://a:8443/s","large_download_url":"https://a:8443/l","upload_url":"https://a:8443/u","extra":"x"}}`
-	cfg, err := ParseServerConfig([]byte(doc))
+	cfg, err := parseServerConfig([]byte(doc))
 	if err != nil {
 		t.Fatal(err)
 	}

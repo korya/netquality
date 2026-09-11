@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/korya/netquality/internal/engine"
 	"github.com/korya/netquality/server"
 )
 
@@ -104,7 +105,7 @@ func TestProbeResponseSize(t *testing.T) {
 				if (err == nil) != (tc.wantErr == "") {
 					t.Fatalf("sample=%+v err=%v; want %q", sample, err, tc.wantErr)
 				}
-				if err != nil && sample != (LatencySample{}) {
+				if err != nil && sample != (engine.LatencySample{}) {
 					t.Errorf("failed probe produced a sample: %+v", sample)
 				}
 				switch tc.wantErr {
@@ -200,7 +201,7 @@ func TestProbeRejectionPreservesLoad(t *testing.T) {
 			if mode == "deadline" {
 				want = context.DeadlineExceeded
 			}
-			if !errors.Is(err, want) || sample != (LatencySample{}) {
+			if !errors.Is(err, want) || sample != (engine.LatencySample{}) {
 				t.Fatalf("sample=%+v error=%v; want %v", sample, err, want)
 			}
 			mu.Lock()
@@ -247,16 +248,17 @@ func TestInvalidProbeResponses(t *testing.T) {
 				loading.Store(false)
 				var mu sync.Mutex
 				var events []Event
-				res, err := RunWithEvents(context.Background(), Target{ConfigURL: srv.URL + server.ConfigPath}, Options{
+				res, err := Run(context.Background(), Target{ConfigURL: srv.URL + server.ConfigPath}, Options{
 					HTTPClient: insecureClient(), IdleProbes: 3, MaxFlows: 1,
 					MaxDuration: 500 * time.Millisecond, MaxBytes: 1 << 40,
-				}, func(e Event) {
-					if e.Kind == EventPhase && e.Phase == "download" {
-						loading.Store(true)
-					}
-					mu.Lock()
-					defer mu.Unlock()
-					events = append(events, e)
+					Events: func(e Event) {
+						if e.Kind == EventPhase && e.Phase == "download" {
+							loading.Store(true)
+						}
+						mu.Lock()
+						defer mu.Unlock()
+						events = append(events, e)
+					},
 				})
 				if err != nil || res.Idle == nil || res.Idle.Samples != 2 || res.Download == nil || res.Upload == nil {
 					t.Fatalf("partial idle and both load results must survive: %+v err=%v", res, err)
@@ -343,13 +345,14 @@ func TestInvalidIdleDiagnostics(t *testing.T) {
 			if mode == "last-status" {
 				probes = 3
 			}
-			res, err := RunWithEvents(ctx, Target{ConfigURL: srv.URL + server.ConfigPath}, Options{
+			res, err := Run(ctx, Target{ConfigURL: srv.URL + server.ConfigPath}, Options{
 				HTTPClient: insecureClient(), IdleProbes: probes, IdleTimeout: 500 * time.Millisecond,
 				Directions: Download, MaxDuration: 100 * time.Millisecond, MaxBytes: 1 << 20,
-			}, func(e Event) {
-				if e.Kind == EventPhase && e.Phase == "download" {
-					loading.Store(true)
-				}
+				Events: func(e Event) {
+					if e.Kind == EventPhase && e.Phase == "download" {
+						loading.Store(true)
+					}
+				},
 			})
 			if res == nil {
 				t.Fatalf("missing partial result: %v", err)

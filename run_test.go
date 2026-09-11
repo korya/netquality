@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/korya/netquality/internal/engine"
 	"github.com/korya/netquality/server"
 )
 
@@ -34,8 +35,15 @@ func newTestServer(t *testing.T, o server.Options) (Target, *http.Client) {
 	return Target{ConfigURL: srv.URL + server.ConfigPath}, &http.Client{Transport: tr}
 }
 
+// defaultStability is the engine's default parameter set as the public type.
+// Callers get the same values from a zero StabilityParams; tests name them
+// explicitly so they can override one field.
+func defaultStability() StabilityParams {
+	return stabilityFrom(engine.DefaultStabilityParams())
+}
+
 func fastStability() StabilityParams {
-	p := DefaultStabilityParams()
+	p := defaultStability()
 	p.Interval = 100 * time.Millisecond
 	p.MaxProbesPerSecond = 20
 	return p
@@ -47,16 +55,17 @@ func TestRunLoopback(t *testing.T) {
 		mu     sync.Mutex
 		events []Event
 	)
-	res, err := RunWithEvents(context.Background(), target, Options{
+	res, err := Run(context.Background(), target, Options{
 		HTTPClient:  client,
 		MaxDuration: 3 * time.Second,
 		MaxBytes:    1 << 40,
 		MaxFlows:    4,
 		Stability:   fastStability(),
-	}, func(e Event) {
-		mu.Lock()
-		defer mu.Unlock()
-		events = append(events, e)
+		Events: func(e Event) {
+			mu.Lock()
+			defer mu.Unlock()
+			events = append(events, e)
+		},
 	})
 	if err != nil {
 		t.Fatal(err)

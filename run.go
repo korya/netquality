@@ -16,6 +16,7 @@ import (
 )
 
 // Run executes the responsiveness test against t and returns the Result.
+// Set Options.Events to follow the run as it happens.
 //
 // If ctx is cancelled mid-run, Run returns the partial Result (Cancelled=true)
 // together with ctx.Err(). If a load phase fails before completing an
@@ -23,14 +24,8 @@ import (
 // reason=flow_error, everything measured before it intact) together with the
 // error. Only discovery failures return a nil Result.
 func Run(ctx context.Context, t Target, o Options) (*Result, error) {
-	return RunWithEvents(ctx, t, o, nil)
-}
-
-// RunWithEvents is Run with a progress sink. sink may be nil; otherwise it
-// must be safe for concurrent use, because flow and probe goroutines call it
-// (see Event).
-func RunWithEvents(ctx context.Context, t Target, o Options, sink func(Event)) (*Result, error) {
-	r := &runner{opts: o.withDefaults(), sink: sink}
+	opts := o.withDefaults()
+	r := &runner{opts: opts, sink: opts.Events}
 	return r.run(ctx, t)
 }
 
@@ -223,7 +218,7 @@ func (r *runner) discover(ctx context.Context, t Target) (*ServerConfig, error) 
 	if err != nil {
 		return nil, fmt.Errorf("netquality: read config: %w", err)
 	}
-	cfg, err := ParseServerConfig(body)
+	cfg, err := parseServerConfig(body)
 	if err != nil {
 		return nil, err
 	}
@@ -236,7 +231,7 @@ func (r *runner) idle(ctx context.Context) (*LatencyStats, error) {
 	defer cancel()
 	rt := r.factory.newTransport(false)
 	defer closeIdle(rt)
-	var samples []LatencySample
+	var samples []engine.LatencySample
 	var lastErr error
 	var invalidSize error
 	for i := 0; i < r.opts.IdleProbes; i++ {
@@ -259,7 +254,7 @@ func (r *runner) idle(ctx context.Context) (*LatencyStats, error) {
 	}
 	var st *LatencyStats
 	if len(samples) > 0 {
-		stats := engine.ComputeLatencyStats(samples)
+		stats := latencyStatsFrom(engine.ComputeLatencyStats(samples))
 		st = &stats
 	}
 	if ctx.Err() != nil && len(samples) < r.opts.IdleProbes {
@@ -297,8 +292,8 @@ type phaseState struct {
 	flowsMu sync.Mutex
 
 	samplesMu sync.Mutex
-	curF      []LatencySample // samples of the interval in progress
-	curS      []LatencySample
+	curF      []engine.LatencySample // samples of the interval in progress
+	curS      []engine.LatencySample
 
 	// stop can be called from any flow or probe goroutine (a flow error, the
 	// byte cap) as well as from the phase loop, so everything it writes is
@@ -343,7 +338,7 @@ func (p *phaseState) flowErrors() (int, error) {
 	return p.flowErrs, p.flowErr
 }
 
-func (p *phaseState) addSample(self bool, s LatencySample) {
+func (p *phaseState) addSample(self bool, s engine.LatencySample) {
 	p.samplesMu.Lock()
 	defer p.samplesMu.Unlock()
 	if self {
@@ -354,7 +349,7 @@ func (p *phaseState) addSample(self bool, s LatencySample) {
 }
 
 // take returns and clears the samples of the interval in progress.
-func (p *phaseState) take() (foreign, self []LatencySample) {
+func (p *phaseState) take() (foreign, self []engine.LatencySample) {
 	p.samplesMu.Lock()
 	defer p.samplesMu.Unlock()
 	foreign, self = p.curF, p.curS
@@ -434,7 +429,7 @@ func (r *runner) loadPhase(ctx context.Context, dir Directions) (*DirectionResul
 			}
 		}()
 	}
-	p.eng = engine.New(sp, r.opts.MaxFlows)
+	p.eng = engine.New(sp.toEngine(), r.opts.MaxFlows)
 	for i := 0; i < p.eng.InitialFlows(); i++ {
 		addFlow()
 	}
@@ -516,9 +511,9 @@ loop:
 		dr.ThroughputBPS = dr.MeanThroughputBPS
 	}
 	dr.ThroughputStable = sum.ThroughputStable
-	dr.ThroughputConfidence = sum.ThroughputConfidence
+	dr.ThroughputConfidence = Confidence(sum.ThroughputConfidence)
 	dr.ResponsivenessStable = sum.ResponsivenessStable
-	dr.ResponsivenessConfidence = sum.ResponsivenessConfidence
+	dr.ResponsivenessConfidence = Confidence(sum.ResponsivenessConfidence)
 	dr.Reason = p.stopReason()
 	dr.Truncated = dr.Reason != ReasonNone
 	dr.RPM, dr.ForeignRPM, dr.SelfRPM = sum.RPM, sum.ForeignRPM, sum.SelfRPM
@@ -545,22 +540,22 @@ loop:
 		}
 	}
 	if len(sum.Foreign) > 0 {
-		st := engine.ComputeLatencyStats(sum.Foreign)
+		st := latencyStatsFrom(engine.ComputeLatencyStats(sum.Foreign))
 		dr.Loaded.Foreign = &st
 	}
 	if len(sum.Self) > 0 {
-		st := engine.ComputeLatencyStats(sum.Self)
+		st := latencyStatsFrom(engine.ComputeLatencyStats(sum.Self))
 		dr.Loaded.Self = &st
 	}
 	if len(sum.Foreign)+len(sum.Self) > 0 {
-		combined := make([]LatencySample, 0, len(sum.Foreign)+len(sum.Self))
+		combined := make([]engine.LatencySample, 0, len(sum.Foreign)+len(sum.Self))
 		for _, x := range sum.Foreign {
-			combined = append(combined, LatencySample{Total: x.HTTP})
+			combined = append(combined, engine.LatencySample{Total: x.HTTP})
 		}
 		for _, x := range sum.Self {
-			combined = append(combined, LatencySample{Total: x.HTTP})
+			combined = append(combined, engine.LatencySample{Total: x.HTTP})
 		}
-		st := engine.ComputeLatencyStats(combined)
+		st := latencyStatsFrom(engine.ComputeLatencyStats(combined))
 		dr.Loaded.Combined = &st
 	}
 
@@ -606,7 +601,7 @@ func (r *runner) probeLoop(ctx context.Context, p *phaseState) {
 		go func() {
 			defer wg.Done()
 			defer func() { <-sem }()
-			var s LatencySample
+			var s engine.LatencySample
 			var err error
 			kind := "foreign"
 			if self {

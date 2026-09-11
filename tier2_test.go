@@ -45,13 +45,14 @@ func TestFullRampToMaxFlows(t *testing.T) {
 	p.StdDevTolerance = 1e-9 // never stable
 	p.RampGainTolerance = -1 // ramp all the way regardless of gain
 	var maxSeen int
-	res, err := RunWithEvents(context.Background(), target, Options{
+	res, err := Run(context.Background(), target, Options{
 		HTTPClient: client, Directions: Download, IdleProbes: -1, MaxFlows: DefaultMaxFlows,
 		MaxDuration: 2 * time.Second, MaxBytes: 1 << 40, Stability: p,
-	}, func(e Event) {
-		if e.Kind == EventFlow && e.Flows > maxSeen {
-			maxSeen = e.Flows
-		}
+		Events: func(e Event) {
+			if e.Kind == EventFlow && e.Flows > maxSeen {
+				maxSeen = e.Flows
+			}
+		},
 	})
 	if err != nil {
 		t.Fatal(err)

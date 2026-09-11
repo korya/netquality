@@ -295,10 +295,11 @@ func TestCancelDuringIdle(t *testing.T) {
 func TestEventStream(t *testing.T) {
 	target, client := newTestServer(t, server.Options{})
 	var mu = make(chan Event, 10000)
-	res, err := RunWithEvents(context.Background(), target, Options{
+	res, err := Run(context.Background(), target, Options{
 		HTTPClient: client, Directions: Download, IdleProbes: 2, MaxFlows: 3,
 		MaxDuration: 500 * time.Millisecond, MaxBytes: 1 << 40, Stability: fastStability(),
-	}, func(e Event) { mu <- e })
+		Events: func(e Event) { mu <- e },
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

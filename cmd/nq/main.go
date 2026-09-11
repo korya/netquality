@@ -143,7 +143,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 	} else if !*jsonOut {
 		sink = progressPrinter(stderr)
 	}
-	res, err := netquality.RunWithEvents(ctx, t, opts, sink)
+	opts.Events = sink
+	res, err := netquality.Run(ctx, t, opts)
 	if res == nil {
 		fmt.Fprintln(stderr, "nq:", err)
 		return exitFail

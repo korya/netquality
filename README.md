@@ -11,9 +11,9 @@ and **`nqserver`**, a reference server you can host yourself.
   distort a number, the library works around them.
 - Standard library only, no CGO, so it adds nothing to your build. Requires
   Go 1.26+ (older lines no longer receive TLS/HTTP security fixes).
-- Every run is bounded by **time and connection count** before it starts —
-  and by bytes too when you say the link is metered — and every number in
-  the result says how it was obtained.
+- Every run is bounded by **time and connection count** before it starts, and
+  by bytes too when you say the link is metered. Every number in the result
+  says how it was obtained.
 - Sends nothing over the network except the test itself.
 
 ```
@@ -27,9 +27,9 @@ Cost       370.5 MB moved in 21.0s
 
 ## What it measures
 
-1. **Discovery** – fetches the server's JSON config (`/.well-known/nq` or a
+1. **Discovery.** Fetches the server's JSON config (`/.well-known/nq` or a
    vendor path) to learn the small-download, large-download and upload URLs.
-2. **Idle latency** – `IdleProbes` sequential GETs of the small resource
+2. **Idle latency.** `IdleProbes` sequential GETs of the small resource
    (1 byte in the draft; up to 10 accepted for Cloudflare compatibility),
    each on a **fresh connection**, so a sample includes DNS + TCP + TLS + HTTP.
    Per-stage medians are reported via `net/http/httptrace`.
@@ -43,18 +43,18 @@ Cost       370.5 MB moved in 21.0s
    - declares throughput stable when the standard deviation of the last four
      moving averages is under 5 % of the current one, then does the same for
      responsiveness and stops.
-4. **Responsiveness (RPM)** – "round trips per minute", `60000 / RTT_ms`.
+4. **Responsiveness (RPM).** "Round trips per minute", `60000 / RTT_ms`.
    Following the draft:
    `foreign = 60000 / mean(TM(tcp), TM(tls per RTT), TM(http))`,
    `self = 60000 / TM(http_on_loaded_connection)`, `RPM = (foreign+self)/2`,
    where `TM` is the single-sided trimmed mean at the 95th percentile over the
    last four intervals. Roughly: < 300 RPM poor, > 1000 good, > 6000 excellent.
-5. **Jitter** – mean absolute deviation of the samples from their mean,
+5. **Jitter.** Mean absolute deviation of the samples from their mean,
    reported for idle and loaded sets. Percentiles (`p80`/`p90`/`p95`/`p99`)
    appear only when there are enough samples for them to differ from the
    maximum (5/10/20/100 under nearest rank), so the default five idle probes
    yield `p80`, never a fake `p95`.
-6. **Cost** – bytes moved and wall time per phase.
+6. **Cost.** Bytes moved and wall time per phase.
 
 ## Library
 
@@ -79,21 +79,22 @@ on cancelled partial results too, and both stay in the result if you share it.
 Targets: `netquality.Apple`, `netquality.Cloudflare`, `netquality.WellKnown("host:port")`,
 or `netquality.Target{ConfigURL: "..."}`.
 
-`RunWithEvents` takes a `func(Event)` sink for progress bars. Proxies and TLS
+`Options.Events` takes a `func(Event)` sink for progress bars. Proxies and TLS
 settings come through `Options.HTTPClient` (its `*http.Transport` is cloned per
 flow so each flow owns a connection). `Options.Logger` accepts a `*slog.Logger`.
 
 `Result` marshals to JSON with stable snake_case names; the CLI's `--json`
 output is exactly that struct. `schema_version` (currently 1) is its first
 field: it changes only when a field is renamed, removed, retyped, or changes
-meaning — never for additions — so stored documents stay interpretable. Directions that did not run are omitted, not
-zero. Each `DirectionResult` carries `truncated`, `reason`
+meaning, never for additions, so stored documents stay interpretable.
+Directions that did not run are omitted, not zero. Each `DirectionResult`
+carries `truncated`, `reason`
 (`bytes_cap` | `duration_cap` | `cancelled` | `flow_error`) and the draft's
 `throughput_confidence` / `responsiveness_confidence` (`low` | `medium` | `high`).
 Whenever four consecutive intervals agreed, a direction also carries
-`throughput_lower_bound_bps` — a conservative figure that holds even when the
-estimate did not converge — with its `lower_bound_window` and `rpm_upper_bound`
-(LOAD-13).
+`throughput_lower_bound_bps`, with its `lower_bound_window` and
+`rpm_upper_bound` (LOAD-13). That figure is deliberately conservative: it
+holds even when the estimate did not converge.
 
 ## CLI
 
@@ -144,8 +145,8 @@ Every endpoint, config included, answers `401` without the token. Library
 callers set `Options.Header`. `--allow-anonymous` opts out explicitly;
 `--self-signed` implies it for local development.
 
-**Load limits** protect egress without biasing measurements — they gate
-whether a request may *start*, never slow one down:
+**Load limits** protect egress without biasing measurements. They gate whether
+a request may *start*, and never slow down one that has already begun:
 
 | Flag | Default | Effect |
 |---|---|---|
@@ -156,10 +157,10 @@ whether a request may *start*, never slow one down:
 | `--max-connections` | 256 | extra connections wait in the accept queue |
 | `--idle-timeout` | 2 min | closes a connection with no request in flight; HTTP/2 peers are pinged after 30 s of silence; transfers are never cut |
 
-Byte credit and admission slots are checked atomically before a transfer
-starts. Completion charges actual application payload bytes and releases the
-slot, including on cancellation or I/O failure; a panic conservatively charges
-the request cap. Config and small/probe requests do not consume slots.
+The server checks byte credit and admission slots atomically before a transfer
+starts. On completion it charges the actual application payload bytes and
+releases the slot, including on cancellation or I/O failure; a panic
+conservatively charges the request cap. Config and small/probe requests do not consume slots.
 `--client-bytes -1` disables both byte budgeting and per-client admission slots.
 An explicit `--client-concurrency` then produces a warning, including with
 self-signed mode's default disabled budget; set a sufficiently large positive
@@ -201,10 +202,10 @@ identity can exhaust its 32 transfer slots before the server reaches its
 256-connection limit; raising that global limit does not add per-client slots.
 
 Behind a load balancer the client key is the balancer's address; the server
-deliberately does not trust `X-Forwarded-For` — use signed URLs with a
-subject (below) to key budgets per device instead.
+deliberately does not trust `X-Forwarded-For`. Use signed URLs with a subject
+(below) to key budgets per device instead.
 
-**Signed URLs — no secret on clients.** Your backend serves the config
+**Signed URLs: no secret on clients.** Your backend serves the config
 document with test URLs it has signed; `nqserver` verifies them and the
 laptop never holds a reusable credential:
 
@@ -217,15 +218,15 @@ nqserver sign --key <key> --ttl 10m --sub laptop-7 https://nq.example.com/nq/sma
 
 Put the three signed URLs in a config document served by your backend and
 point the client at it (`Target{ConfigURL: "https://backend/nq-config"}`).
-The client needs no flags. The signature covers only the path, `exp` and
-`sub` — `sig = base64url(HMAC-SHA256(key, path + "\n" + exp + "\n" + sub))` —
-so any language can issue it, parameter order is irrelevant, and unsigned
-parameters are deliberately unprotected (never let a server trust them).
-Validity is `exp` + 30 s leeway, at most 24 h — keep issuer and server
-clocks in sync, a server clock behind the issuer refuses everything as
-"issued too far ahead". Sign the *decoded* path (`/nq/large`, not
-`/nq/%6Carge`), percent‑encode `sub` (a raw `+` decodes to a space and fails
-closed), and emit `sig` in any base64 flavour. `sub` keys the per-client
+The client needs no flags. The signature covers only the path, `exp` and `sub`:
+`sig = base64url(HMAC-SHA256(key, path + "\n" + exp + "\n" + sub))`. Any
+language can issue it, parameter order is irrelevant, and unsigned parameters
+are deliberately unprotected (never let a server trust them).
+Validity is `exp` + 30 s leeway, at most 24 h. Keep issuer and server clocks
+in sync: a server clock behind the issuer refuses everything as "issued too
+far ahead". Sign the *decoded* path (`/nq/large`, not `/nq/%6Carge`),
+percent-encode `sub` (a raw `+` decodes to a space and fails closed), and emit
+`sig` in any base64 flavour. `sub` keys the per-client
 budget, so ten laptops behind one NAT get ten budgets. Repeat
 `--signing-key` to rotate. Go backends can call `server.SignURL`.
 
@@ -268,8 +269,8 @@ compromise) and transparent TCP-level proxies that pass TLS through untouched
 | `MaxDuration` | 12 s per direction | the budget: phase ends; if not yet stable → `truncated`, `reason=duration_cap`. Cost ≤ rate × 12 s |
 | `MaxBytes` | **none** (opt-in) | set on metered links; phase ends → `reason=bytes_cap` |
 | `MaxFlows` | 16 | never more concurrent load connections |
-| Small response body | 1–10 bytes | reject empty/oversized responses; read at most 11 bytes to detect overflow; discard invalid samples and warn |
-| `ctx` cancellation | – | all flows stop within ~200 ms; partial result, `cancelled=true` |
+| Small response body | 1-10 bytes | reject empty/oversized responses; read at most 11 bytes to detect overflow; discard invalid samples and warn |
+| `ctx` cancellation | n/a | all flows stop within ~200 ms; partial result, `cancelled=true` |
 
 The combined phase budget is `ConfigTimeout + IdleTimeout + N × MaxDuration`,
 where N is the selected direction count; omit `IdleTimeout` when idle is
@@ -319,11 +320,11 @@ Apple and Cloudflare response sizes and how to repeat the small GETs.
 | Self probes on HTTP/1.1 | use TCP RTT estimate | omitted; RPM from foreign probes only, warning recorded | TCP_INFO is not portable in pure Go. |
 | Server admission | successful load endpoints return 200 | per-client byte credit and concurrent-request slots may refuse new load requests with 429 | Bounds admitted work without throttling transfers already running; probes are exempt. |
 | Flow addition | one per interval | **doubling** each interval while a step gains ≥ 10 % goodput, up to `MaxFlows` | Reaches saturation in ≤ 5 intervals instead of 16, so a 10 Gbps or high-RTT link still settles inside the 12 s budget; a slow link stops after one exploratory flow. |
-| Responsiveness tracking | after goodput stability | from the end of the ramp; stability judged on the windowed values, not on averages of them | Removes 3–4 s of latency from every run; the phase still ends only with both series stable. |
-| Upload byte accounting | – | intervals inflated by the HTTP/2 send window of new flows are excluded | Bytes are counted when the transport takes them; on a 20 Mbps link the 4 MiB credit otherwise reports 53 Mbps with high confidence. |
-| Capacity change | – | a > 25 % goodput drop restarts stability tracking | The draft averages across the change. |
+| Responsiveness tracking | after goodput stability | from the end of the ramp; stability judged on the windowed values, not on averages of them | Removes 3-4 s of latency from every run; the phase still ends only with both series stable. |
+| Upload byte accounting | not specified | intervals inflated by the HTTP/2 send window of new flows are excluded | Bytes are counted when the transport takes them; on a 20 Mbps link the 4 MiB credit otherwise reports 53 Mbps with high confidence. |
+| Capacity change | not specified | a > 25 % goodput drop restarts stability tracking | The draft averages across the change. |
 | Responsiveness window | last MAD intervals | every sample since throughput became stable (`loaded_window`) | Foreign probes are sparse (a TLS handshake each); a fixed 4-tick window could hold self samples and no foreign ones, which read as "no fresh connection ever succeeded". Stability is still judged on the draft's window. |
-| Probe byte accounting | – | foreign 5000 B, self 1000 B (draft's estimates) | Counted against `MaxBytes` and the 5 % capacity rule. |
+| Probe byte accounting | not specified | foreign 5000 B, self 1000 B (draft's estimates) | Counted against `MaxBytes` and the 5 % capacity rule. |
 | Small response size | 1 byte | complete nonempty bodies up to 10 bytes accepted; fixed ceiling, no override | Preserve Cloudflare's advertised ten-byte probe; reject empty and larger bodies before they become latency samples. |
 | Config `version` | must be `1` | `1` or `"1"` accepted | Lenient on the wire, strict on everything else (duplicates, hosts, scheme). |
 | Config field names | `*_download_url`, `upload_url` | also accepts Apple/Cloudflare `*_https_*` names, preferring them | Interop with deployed servers. |

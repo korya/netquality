@@ -16,7 +16,13 @@ import (
 func TestLowerBoundInResult(t *testing.T) {
 	target, client := newTestServer(t, server.Options{})
 	p := fastStability()
-	p.StdDevTolerance = 0.9
+	// This integration test verifies that a measured lower bound reaches the
+	// public result. Keep the acceptance window deliberately broad: loopback
+	// goodput varies substantially across operating systems and under race
+	// instrumentation, while the bound criterion itself is covered by the
+	// deterministic engine tests.
+	p.StdDevTolerance = 10
+	p.ChangeTolerance = 1
 	var holds int
 	res, err := RunWithEvents(context.Background(), target, Options{
 		HTTPClient: client, Directions: Both, IdleProbes: -1, MaxFlows: 4,

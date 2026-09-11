@@ -5,6 +5,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-10
+
+This release puts a bound on the parts of a run, and of the reference
+server, that had none. A peer that stopped responding could hang the idle
+phase for as long as it liked, return a probe body of any size, or hold a
+server's byte budget open for ever. Each now has a limit, a warning that
+names the limit it hit, and partial results that survive it.
+`schema_version` stays 1.
+
 ### Added
 - `Options.IdleTimeout` and `nq --idle-timeout` bound the entire idle probing
   phase (default 10 s). A stalled idle response now times out, preserves any
@@ -255,7 +264,8 @@ the run it came from. `schema_version` stays 1: all result fields are additions.
 - Unit, loopback integration and opt-in live (`NQ_LIVE=1`) tests; CI on
   Linux/macOS/Windows plus a six-target cross-compile matrix.
 
-[Unreleased]: https://github.com/korya/netquality/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/korya/netquality/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/korya/netquality/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/korya/netquality/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/korya/netquality/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/korya/netquality/compare/v0.2.0...v0.2.1

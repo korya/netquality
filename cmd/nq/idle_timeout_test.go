@@ -20,6 +20,7 @@ import (
 
 func idleStallServer(t *testing.T, h2, body bool) string {
 	t.Helper()
+	skipIfShort(t)
 	var loading atomic.Bool
 	var small atomic.Int64
 	h := server.Handler(server.Options{MaxClientBytes: -1})
@@ -83,6 +84,7 @@ func TestIdleTimeoutOutput(t *testing.T) {
 }
 
 func TestIdleTimeoutBinary(t *testing.T) {
+	skipIfShort(t)
 	bin := filepath.Join(t.TempDir(), "nq.exe")
 	buildCtx, stopBuild := context.WithTimeout(context.Background(), time.Minute)
 	defer stopBuild()

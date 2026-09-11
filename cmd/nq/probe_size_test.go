@@ -15,6 +15,7 @@ import (
 )
 
 func TestInvalidProbeOutput(t *testing.T) {
+	skipIfShort(t)
 	for _, mode := range []string{"json", "human", "events"} {
 		t.Run(mode, func(t *testing.T) {
 			var small atomic.Int64

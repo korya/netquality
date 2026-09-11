@@ -14,6 +14,7 @@ import (
 )
 
 func TestIPv6Loopback(t *testing.T) {
+	skipIfShort(t)
 	ln, err := net.Listen("tcp6", "[::1]:0")
 	if err != nil {
 		t.Skip("IPv6 loopback unavailable:", err)

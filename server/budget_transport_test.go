@@ -37,6 +37,7 @@ func (b budgetSignalBody) Read(p []byte) (int, error) {
 }
 
 func TestBudgetCancellationOverHTTP(t *testing.T) {
+	skipIfShort(t)
 	for _, h2 := range []bool{false, true} {
 		for _, upload := range []bool{false, true} {
 			t.Run(fmt.Sprintf("h2=%v/upload=%v", h2, upload), func(t *testing.T) {

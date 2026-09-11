@@ -140,6 +140,7 @@ func TestBudgetExhaustedMidRunIsGraceful(t *testing.T) {
 }
 
 func TestConnectionCapDoesNotBreakRun(t *testing.T) {
+	skipIfShort(t)
 	// A cap of 8 with a client that wants up to 16 flows plus probes: the
 	// run completes (fewer flows), never errors. The listener must be wrapped
 	// before the server starts accepting.
@@ -171,6 +172,7 @@ func TestConnectionCapDoesNotBreakRun(t *testing.T) {
 // role a product backend plays in the signed-URL flow.
 func signedBackend(t *testing.T, nqURL string, key []byte, exp time.Time, sub string) *httptest.Server {
 	t.Helper()
+	skipIfShort(t)
 	sign := func(path string) string {
 		s, err := server.SignURL(key, nqURL+path, exp, sub)
 		if err != nil {

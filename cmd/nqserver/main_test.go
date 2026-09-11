@@ -125,6 +125,7 @@ func loadLeaf(t *testing.T, certPath string) *x509.Certificate {
 // serve starts the server with args on an ephemeral port and returns its address.
 func serve(t *testing.T, args ...string) net.Addr {
 	t.Helper()
+	skipIfShort(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	addrCh := make(chan net.Addr, 1)
 	done := make(chan int, 1)

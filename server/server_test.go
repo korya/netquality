@@ -14,6 +14,7 @@ import (
 )
 
 func TestHandler(t *testing.T) {
+	skipIfShort(t)
 	srv := httptest.NewUnstartedServer(Handler(Options{LargeSize: 1 << 20, TestEndpoint: "ep"}))
 	srv.EnableHTTP2 = true
 	srv.StartTLS()
@@ -95,6 +96,7 @@ func TestSelfSignedCert(t *testing.T) {
 }
 
 func TestHandlerBaseURLAndMethods(t *testing.T) {
+	skipIfShort(t)
 	srv := httptest.NewTLSServer(Handler(Options{BaseURL: "https://nq.example.test", LargeSize: 3}))
 	defer srv.Close()
 	client := srv.Client()
@@ -185,6 +187,7 @@ func TestAuthorize(t *testing.T) {
 }
 
 func TestHandlerAuthOnEveryRoute(t *testing.T) {
+	skipIfShort(t)
 	srv := httptest.NewTLSServer(Handler(Options{AuthToken: "tok", LargeSize: 16}))
 	defer srv.Close()
 	client := srv.Client()
@@ -216,6 +219,7 @@ func TestHandlerAuthOnEveryRoute(t *testing.T) {
 }
 
 func TestHandlerBudgetAndUploadCap(t *testing.T) {
+	skipIfShort(t)
 	// Budget of 100 bytes: the first large download (64 B) is allowed, the
 	// second request overshoots, then requests get 429; small is exempt.
 	srv := httptest.NewTLSServer(Handler(Options{LargeSize: 64, UploadSize: 10, MaxClientBytes: 100, ClientWindow: time.Hour}))
@@ -266,6 +270,7 @@ func TestHandlerBudgetAndUploadCap(t *testing.T) {
 }
 
 func TestLimitListener(t *testing.T) {
+	skipIfShort(t)
 	inner, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -316,6 +321,7 @@ func TestLimitListener(t *testing.T) {
 // TestLimitListenerCloseAtCap: Close must release an Accept that is waiting
 // at the cap (SRV-9); before, it blocked on the semaphore and Serve hung.
 func TestLimitListenerCloseAtCap(t *testing.T) {
+	skipIfShort(t)
 	inner, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)

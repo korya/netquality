@@ -28,6 +28,7 @@ func TestClientConcurrencyDisabledWarning(t *testing.T) {
 		{"explicit concurrency enabled budget", []string{"--client-bytes", "1048576", "--client-concurrency", "1"}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			skipIfShort(t)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			var out bytes.Buffer

@@ -5,6 +5,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-09-11
+
+The API is now stable. Everything a caller can reach is declared in this
+module's own packages and documented on pkg.go.dev, and from here on a change
+that breaks a compiling program needs a `/v2` import path rather than a
+version bump. Additions stay additions. The measurement algorithm, the wire
+behaviour and `schema_version` are unchanged from 0.5.0: this release is about
+what the API promises, not what the test does.
+
+Upgrading from 0.5.0 touches three things, all of them mechanical, and the
+compiler finds every one.
+
 ### Changed
 - **The public API no longer aliases internal types.** `LatencyStats`,
   `StageMedians`, `Confidence` and `StabilityParams` were aliases of
@@ -25,9 +37,9 @@ All notable changes to this project are documented here. The format follows
   `LatencySample`. `ErrInvalidConfig` stays exported for `errors.Is`.
 
 ### Added
-- `scripts/api-compat.sh` and an advisory CI job report incompatible public API
-  changes since the newest release tag. It becomes blocking when v1.0.0 is
-  tagged.
+- `scripts/api-compat.sh` and a CI job report incompatible public API changes
+  since the newest release tag. The job is advisory in this release and becomes
+  blocking immediately after it, once there is a v1 tag to compare against.
 
 ## [0.5.0] - 2026-09-10
 
@@ -288,7 +300,8 @@ the run it came from. `schema_version` stays 1: all result fields are additions.
 - Unit, loopback integration and opt-in live (`NQ_LIVE=1`) tests; CI on
   Linux/macOS/Windows plus a six-target cross-compile matrix.
 
-[Unreleased]: https://github.com/korya/netquality/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/korya/netquality/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/korya/netquality/compare/v0.5.0...v1.0.0
 [0.5.0]: https://github.com/korya/netquality/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/korya/netquality/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/korya/netquality/compare/v0.2.1...v0.3.0

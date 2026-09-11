@@ -5,6 +5,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- The public API compatibility job now blocks the merge instead of warning.
+  With v1.0.0 tagged there is a stable release to compare against, and a
+  removal, rename or retype needs a `/v2` module path rather than a merge.
+
 ## [1.0.0] - 2026-09-11
 
 The API is now stable. Everything a caller can reach is declared in this

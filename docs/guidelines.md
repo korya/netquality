@@ -106,10 +106,12 @@ before blaming the code.
   triggers pkg.go.dev. Minor bump for features or compatibility changes,
   patch for fixes and docs.
 - `scripts/api-compat.sh` reports incompatible public API changes since the
-  newest tag; run it before a release. Its CI job is advisory while the API
-  may still break: a break is a warning and a job summary, not a red check.
-  Tagging v1.0.0 means reducing that step to the script alone, after which an
-  incompatible change needs a `/v2` module path rather than a merge.
+  newest tag; run it before a release, and its CI job blocks the merge.
+  Since v1.0.0 a removal, rename or retype needs a `/v2` module path and an
+  edit in every caller, so it is a design decision rather than a version bump.
+  Additions are always fine. The script cannot see a type aliased out of an
+  internal package, which is why the public types are declared in their own
+  package (`docs/architecture.md`).
 
 ## Documentation
 

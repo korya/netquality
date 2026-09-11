@@ -54,25 +54,10 @@ jobs:
         with: { fetch-depth: 0 } # the script compares against the newest tag
       - uses: actions/setup-go@v7
         with: { go-version: '1.27.0' }
-      # Advisory until v1.0.0: breaking the API is still allowed, so a break is
-      # a warning and a job summary rather than a red check, which nobody reads
-      # twice. At v1 this whole step becomes `run: scripts/api-compat.sh`
-      # (docs/guidelines.md).
+      # Blocking since v1.0.0: an incompatible change needs a /v2 module path
+      # and an edit in every caller, not a merge (docs/guidelines.md).
       - name: Public API vs the newest release
-        run: |
-          if scripts/api-compat.sh >report.txt 2>&1; then
-            cat report.txt
-            exit 0
-          fi
-          cat report.txt
-          echo "::warning title=Public API changed incompatibly::Allowed before v1.0.0. See the job summary."
-          {
-            echo '## Incompatible public API changes'
-            echo
-            echo '```'
-            cat report.txt
-            echo '```'
-          } >>"$GITHUB_STEP_SUMMARY"
+        run: scripts/api-compat.sh
   fuzz:
     runs-on: ubuntu-latest
     steps:

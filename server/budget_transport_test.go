@@ -83,6 +83,7 @@ func TestBudgetCancellationOverHTTP(t *testing.T) {
 				}
 				start := func(id string) pending {
 					cctx, stop := context.WithCancel(ctx)
+					abort := stop
 					method, path := "GET", LargePath
 					var body io.Reader
 					finish := gates[id].unblock
@@ -91,6 +92,12 @@ func TestBudgetCancellationOverHTTP(t *testing.T) {
 						pr, pw := io.Pipe()
 						body = pr
 						finish = func() { _ = pw.Close() }
+						// Unblock the producer with an error on cancellation. Normal
+						// EOF can let a successful response win the cancellation race.
+						abort = func() {
+							stop()
+							_ = pw.CloseWithError(cctx.Err())
+						}
 						written := make(chan struct{})
 						go func() { defer close(written); _, _ = pw.Write([]byte("x")) }()
 						t.Cleanup(func() { _ = pr.Close(); _ = pw.Close(); awaitBudget(t, written) })
@@ -111,14 +118,7 @@ func TestBudgetCancellationOverHTTP(t *testing.T) {
 						}
 						done <- err
 					}()
-					// The caller owns an open upload producer; close it on cancellation
-					// so HTTP/1.1's request writer can leave its blocked Read.
-					return pending{func() {
-						stop()
-						if upload {
-							finish()
-						}
-					}, finish, done}
+					return pending{abort, finish, done}
 				}
 				a := start("a")
 				defer a.cancel()

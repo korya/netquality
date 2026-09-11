@@ -1,17 +1,17 @@
 _default:
     just --list
 
-# Run the whole test suite (unit + e2e against an in-process nqserver; live tests skip without NQ_LIVE=1).
+# Run unit and integration tests (extra args go to `go test`; `-short` keeps only unit tests).
 test *args:
     go test -count=1 {{ args }} ./...
 
-# Run only the end-to-end tests (every Test* in e2e_test.go files; extra args go to `go test`, e.g. -v).
+# Run only the end-to-end tests: every Test* in files tagged `//go:build e2e` (extra args go to `go test`).
 test-e2e *args:
     #!/usr/bin/env sh
     set -eu
-    for f in e2e_test.go cmd/nq/e2e_test.go; do
+    for f in $(git ls-files '*_test.go' | xargs grep -l '^//go:build e2e$'); do
         names=$(grep -o '^func Test[A-Za-z0-9_]*' "$f" | sed 's/^func //' | paste -sd '|' -)
-        go test -count=1 -run "^($names)\$" {{ args }} "./$(dirname "$f")"
+        go test -count=1 -tags e2e -run "^($names)\$" {{ args }} "./$(dirname "$f")"
     done
 
 # Run a real measurement against Cloudflare with the nq CLI (extra args are nq flags, e.g. --json).

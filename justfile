@@ -1,0 +1,3 @@
+# Run every package benchmark without running the regular test suite.
+bench:
+    go test -run '^$' -bench . -benchmem ./...
